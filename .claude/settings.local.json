@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s https://raw.githubusercontent.com/VOICEVOX/voicevox_engine/master/voicevox_engine/metas/metas.py)",
+      "Bash(curl -s https://raw.githubusercontent.com/VOICEVOX/voicevox_engine/master/voicevox_engine/app/routers/engine_info.py)",
+      "Bash(curl -s https://raw.githubusercontent.com/VOICEVOX/voicevox_engine/master/voicevox_engine/app/routers/preset.py)",
+      "Bash(curl -s https://raw.githubusercontent.com/VOICEVOX/voicevox_engine/master/voicevox_engine/engine_manifest.py)",
+      "Bash(curl -s https://raw.githubusercontent.com/VOICEVOX/voicevox_engine/master/voicevox_engine/tts_pipeline/tts_engine.py)",
+      "Bash(curl -s https://raw.githubusercontent.com/VOICEVOX/voicevox_engine/master/voicevox_engine/preset/model.py)",
+      "Bash(curl -s https://raw.githubusercontent.com/VOICEVOX/voicevox_engine/master/voicevox_engine/utility/core_version_utility.py)",
+      "Bash(curl -s https://raw.githubusercontent.com/VOICEVOX/voicevox_engine/master/setup.py)",
+      "Bash(curl -s https://raw.githubusercontent.com/VOICEVOX/voicevox_engine/master/pyproject.toml)",
+      "Bash(curl -s https://api.github.com/repos/VOICEVOX/voicevox_engine/releases/latest)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('Tag:', d.get\\('tag_name'\\)\\); print\\('Name:', d.get\\('name'\\)\\)\")",
+      "Bash(curl -s https://raw.githubusercontent.com/VOICEVOX/voicevox_engine/master/README.md)"
+    ]
+  }
+}

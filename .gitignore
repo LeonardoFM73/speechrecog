@@ -1,0 +1,21 @@
+# Environment
+__pycache__/
+*.pyc
+.env
+
+# Upload temp dir
+backend/whisper_audio_*
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# Containers
+.docker/
+.dockerenv

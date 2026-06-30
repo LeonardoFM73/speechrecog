@@ -1,0 +1,26 @@
+# Core
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+starlette==0.41.3
+
+# Speech Recognition
+faster-whisper==1.1.0
+onnxruntime-gpu==1.20.1
+ctranslate2==4.8.0
+requests
+
+# LLM (roleplay chat)
+google-genai>=1.0.0
+
+# TTS — local VOICEVOX engine client (async HTTP)
+httpx>=0.27,<1.0
+
+# GPU / Runtime
+torch==2.5.1
+
+# Utilities
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+loguru==0.7.3

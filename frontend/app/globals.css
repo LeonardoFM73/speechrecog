@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-card: #13131f;
+  --bg-card-hover: #1a1a2e;
+  --border-subtle: #2a2a3e;
+  --text-primary: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --accent-red: #ef4444;
+  --accent-green: #22c55e;
+  --accent-blue: #3b82f6;
+  --accent-purple: #8b5cf6;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.mic-wave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.mic-wave-bar {
+  width: 4px;
+  height: 20px;
+  background: var(--accent-red);
+  border-radius: 2px;
+  animation: wave 1.2s ease-in-out infinite;
+}
+
+.mic-wave-bar:nth-child(1) { animation-delay: 0s; }
+.mic-wave-bar:nth-child(2) { animation-delay: 0.1s; }
+.mic-wave-bar:nth-child(3) { animation-delay: 0.2s; }
+.mic-wave-bar:nth-child(4) { animation-delay: 0.3s; }
+.mic-wave-bar:nth-child(5) { animation-delay: 0.4s; }
+
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1.5); }
+}

@@ -1,0 +1,45 @@
+# ===========================
+# Japanese STT — Backend Dockerfile
+# ===========================
+# Single-stage on Ubuntu 22.04 + CUDA 12.6 runtime.
+# Uses venv to avoid system-pip vs python3.11 path issues.
+# ===========================
+
+FROM nvidia/cuda:12.6.0-runtime-ubuntu22.04
+
+LABEL maintainer="speechrecog"
+LABEL description="Japanese Speech-to-Text — Faster-Whisper Medium on GPU"
+
+WORKDIR /app
+
+# 1. System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 python3.11-venv \
+        libgomp1 libgfortran5 \
+        curl ca-certificates gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Create venv and install all packages inside it
+RUN python3.11 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# 3. PyTorch with CUDA 12.4
+RUN pip install --no-cache-dir \
+        torch==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+
+# 4. All other dependencies
+COPY backend/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# 5. Copy app code
+COPY backend/ ./backend/
+
+# Change to backend directory so relative imports resolve
+WORKDIR /app/backend
+
+EXPOSE 8000
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "-m", "app"]

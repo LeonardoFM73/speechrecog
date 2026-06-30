@@ -1,0 +1,33 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile.*
+.dockerignore
+docker-compose.yml
+
+# Docs
+README.md
