@@ -1,0 +1,103 @@
+# =============================================================================
+# docker-compose.server.yml — runs on the SERVER (10.100.101.12)
+# =============================================================================
+# Brings up: backend (Whisper + chat proxy) + VOICEVOX Engine.
+# Frontend is NOT here — runs locally for mic access.
+#
+# Usage (on the server):
+#   docker compose -f docker-compose.server.yml up -d
+# =============================================================================
+
+services:
+  # ──────────────── Backend ────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    image: localhost/speechrecog_backend:latest
+    container_name: stt-backend
+    restart: unless-stopped
+    init: true
+
+    # GPU passthrough — Docker style (compose v3 deploy stanza)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    # Bind to all interfaces so the local browser can reach us over LAN.
+    ports:
+      - "${BACKEND_PORT:-8001}:8000"
+
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - HF_HOME=/app/.cache/huggingface
+      # LLM (OpenAI-compatible) — required for /chat.
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-http://10.100.101.12:5091/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-EMPTY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-qwen35-9b}
+      # TTS — VOICEVOX on same host (this compose stack).
+      - VOICEVOX_URL=http://voicevox:50021
+      - VOICEVOX_DEFAULT_SPEAKER=${VOICEVOX_DEFAULT_SPEAKER:-2}
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+    depends_on:
+      - voicevox
+
+    volumes:
+      - whisper-model-cache:/app/.cache/huggingface
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ──────────────── VOICEVOX TTS Engine ────────────────
+  voicevox:
+    image: voicevox/voicevox_engine:nvidia-latest
+    container_name: stt-voicevox
+    restart: unless-stopped
+    init: true
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    # Bound only to the server's loopback — only the backend reaches it,
+    # never the open LAN.
+    ports:
+      - "127.0.0.1:${VOICEVOX_PORT:-50021}:50021"
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:50021/version >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ──────────────── Volumes ────────────────
+volumes:
+  whisper-model-cache:
+    driver: local

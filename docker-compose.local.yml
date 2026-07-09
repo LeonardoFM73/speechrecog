@@ -1,0 +1,39 @@
+# =============================================================================
+# docker-compose.local.yml — runs LOCALLY (your laptop).
+# =============================================================================
+# Brings up only the Next.js frontend.
+# Builds it baked with NEXT_PUBLIC_API_URL pointing at the server.
+# The browser then reaches backend over LAN at http://10.100.101.12:8001.
+#
+# Usage (on your local machine):
+#   docker compose -f docker-compose.local.yml up -d
+#
+# Notes:
+#   - Microphone access works because the browser connects to port 3000
+#     served by this container. The browser talks to the remote backend.
+#   - Build arg NEXT_PUBLIC_API_URL is read from .env or default below.
+# =============================================================================
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://10.100.101.12:8001}
+    image: localhost/speechrecog_frontend:latest
+    container_name: stt-frontend-local
+    restart: unless-stopped
+    init: true
+
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+    environment:
+      - NODE_ENV=production
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
