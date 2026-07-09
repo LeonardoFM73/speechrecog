@@ -136,11 +136,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
         ca-certificates \
         libsndfile1 \
-        cmake \
         build-essential \
         gosu \
     && rm -rf /var/lib/apt/lists/* && \
-    ln -sf /usr/bin/python3.11 /usr/bin/python3
+    ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
+    # pyopenjtalk's htsengine submodule has cmake_minimum_required(VERSION 3.1)
+    # which is rejected by CMake 4.x+. Install 3.28.x (last 3.x series).
+    pip install --no-cache-dir "cmake<4"
 
 WORKDIR /opt/voicevox_engine
 
