@@ -1,0 +1,197 @@
+# =============================================================================
+# Dockerfile.voicevox-cuda — VOICEVOX Engine with custom ONNX Runtime GPU build
+# =============================================================================
+# Target: NVIDIA RTX 5090 (compute capability 12.0 / Blackwell).
+# Why: pre-built voicevox/voicevox_engine:nvidia-latest image ships ONNX
+# Runtime binaries that only include SASS up to ~sm_89. On a 5090 this
+# produces "cudaErrorNoKernelImageForDevice" at first inference.
+#
+# Solution: build ONNX Runtime from source with CMAKE_CUDA_ARCHITECTURES=120
+# so sm_120 kernels are emitted. Then assemble the VOICEVOX Engine runtime
+# around our custom ORT libs.
+#
+# Build on the server (long; 2-3 hours):
+#   docker build -f Dockerfile.voicevox-cuda -t voicevox-cuda-sm120 .
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Build ONNX Runtime from source with sm_120 support
+# -----------------------------------------------------------------------------
+FROM nvidia/cuda:12.8.0-devel-ubuntu22.04 AS ort-builder
+
+ARG ORT_VERSION=v1.21.0
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Toolchain + Python deps for ONNX Runtime build.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        git \
+        python3 \
+        python3-pip \
+        python3-dev \
+        wget \
+        ca-certificates \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# cuDNN runtime headers — required by ORT's CUDA EP build.
+# On nvidia/cuda:12.8.0-devel images, libcudnn ships with the base.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libcudnn9-dev-cuda-12 \
+    || apt-get install -y --no-install-recommends libcudnn8-dev-cuda-12 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+
+# Clone ONNX Runtime at the pinned tag. --recursive pulls submodules
+# (onnx, protobuf, etc.) which the build requires.
+RUN git clone --branch ${ORT_VERSION} --depth 1 --recursive \
+        https://github.com/microsoft/onnxruntime.git onnxruntime
+
+WORKDIR /opt/onnxruntime
+
+# Older ONNX Runtime versions need pip 22-ish to handle setuptools.
+RUN python3 -m pip install --upgrade "pip==23.3.1" "setuptools>=68" wheel
+
+# Configure + build ORT with CUDA EP, sm_120 kernels, shared libs.
+# Key flags:
+#   --use_cuda                       → enable CUDA Execution Provider
+#   --build_shared_lib               → produce libonnxruntime.so
+#   --build_wheel                    → also produce wheel (sanity check)
+#   --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES=120 → sm_120 SASS
+#   --skip_submodule_sync            → don't re-fetch submodules
+#   --allow_running_as_root          → Docker build runs as root
+RUN python3 ./tools/ci_build/build.py \
+        --build_dir /opt/build/RelWithDebInfo \
+        --config RelWithDebInfo \
+        --use_cuda \
+        --cuda_home /usr/local/cuda \
+        --cudnn_home /usr/lib/x86_64-linux-gnu \
+        --build_shared_lib \
+        --build_wheel \
+        --parallel \
+        --skip_submodule_sync \
+        --allow_running_as_root \
+        --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=120" \
+        --cmake_extra_defines "onnxruntime_ENABLE_PYTHON=OFF" \
+        --cmake_extra_defines "onnxruntime_BUILD_UNIT_TESTS=OFF" \
+        --cmake_extra_defines "onnxruntime_BUILD_BENCHMARKS=OFF" \
+        --cmake_extra_defines "onnxruntime_USE_FLASH_ATTENTION=OFF" \
+        --update
+
+# After build, stage the produced shared libraries into a clean dir.
+RUN mkdir -p /opt/ort-libs && \
+    cp -P /opt/build/RelWithDebInfo/libonnxruntime.so* /opt/ort-libs/ && \
+    cp -P /opt/build/RelWithDebInfo/libonnxruntime_providers_*.so /opt/ort-libs/ || true
+
+# -----------------------------------------------------------------------------
+# Stage 2: Download prebuilt voicevox_core (GPU build) — no Rust compile
+# -----------------------------------------------------------------------------
+FROM ubuntu:22.04 AS voicevox-core-downloader
+
+ARG VOICEVOX_CORE_VERSION=0.16.4
+ARG VOICEVOX_CORE_ASSET=voicevox_core-linux-x64-gpu-${VOICEVOX_CORE_VERSION}
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        wget unzip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /work
+
+# Official prebuilt GPU release — includes libcore.so + Python binding.
+# It dynamically loads libonnxruntime.so from --runtime_dir at startup,
+# so we can swap our custom-built ORT without recompiling the Rust core.
+RUN wget -q -O ${VOICEVOX_CORE_ASSET}.zip \
+        https://github.com/VOICEVOX/voicevox_core/releases/download/${VOICEVOX_CORE_VERSION}/${VOICEVOX_CORE_ASSET}.zip && \
+    unzip -q ${VOICEVOX_CORE_ASSET}.zip && \
+    mkdir -p /opt/voicevox_core && \
+    mv ${VOICEVOX_CORE_ASSET}/libcore.so /opt/voicevox_core/ && \
+    mv ${VOICEVOX_CORE_ASSET}/*.so.* /opt/voicevox_core/ 2>/dev/null || true && \
+    mv ${VOICEVOX_CORE_ASSET}/VERSION /opt/voicevox_core/ && \
+    rm -rf ${VOICEVOX_CORE_ASSET} ${VOICEVOX_CORE_ASSET}.zip
+
+# -----------------------------------------------------------------------------
+# Stage 3: Download voicevox_engine source + assemble runtime image
+# -----------------------------------------------------------------------------
+FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04 AS runtime
+
+ARG VOICEVOX_ENGINE_VERSION=0.20.0
+ARG VOICEVOX_RESOURCE_VERSION=0.13.0-preview.2
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 \
+        python3.11-dev \
+        python3.11-venv \
+        python3-pip \
+        git \
+        wget \
+        ca-certificates \
+        libsndfile1 \
+        cmake \
+        build-essential \
+        gosu \
+    && rm -rf /var/lib/apt/lists/* && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python3
+
+WORKDIR /opt/voicevox_engine
+
+# Clone the engine source at the pinned tag.
+RUN git clone --branch ${VOICEVOX_ENGINE_VERSION} --depth 1 \
+        https://github.com/VOICEVOX/voicevox_engine.git .
+
+# Install Python deps the engine needs.
+RUN python3 -m pip install --upgrade "pip" "setuptools" wheel && \
+    python3 -m pip install -r requirements.txt
+
+# Bring in the prebuilt voicevox_core (GPU).
+COPY --from=voicevox-core-downloader /opt/voicevox_core /opt/voicevox_core
+
+# Bring in our custom-built ONNX Runtime (sm_120 enabled).
+COPY --from=ort-builder /opt/ort-libs /opt/onnxruntime/lib
+
+# Both lib dirs go on the linker search path.
+RUN echo "/opt/voicevox_core" > /etc/ld.so.conf.d/voicevox_core.conf && \
+    echo "/opt/onnxruntime/lib" > /etc/ld.so.conf.d/onnxruntime.conf && \
+    ldconfig
+
+# Pull the engine README the entrypoint prints on startup.
+RUN wget -q -O /opt/voicevox_engine/README.md \
+        https://raw.githubusercontent.com/VOICEVOX/voicevox_resource/${VOICEVOX_RESOURCE_VERSION}/engine/README.md
+
+# Pin the engine version string in source.
+RUN sed -i "s/__version__ = \"latest\"/__version__ = \"${VOICEVOX_ENGINE_VERSION}\"/" \
+        /opt/voicevox_engine/voicevox_engine/__init__.py
+
+# Create non-root user (matches upstream pattern).
+RUN useradd --create-home --shell /bin/bash user && \
+    chown -R user:user /opt/voicevox_engine
+
+# Trigger pyopenjtalk dictionary download at build time so first boot is fast.
+RUN gosu user python3 -c "import pyopenjtalk; pyopenjtalk._lazy_init()"
+
+COPY <<'EOF' /entrypoint.sh
+#!/bin/bash
+set -eu
+cat /opt/voicevox_engine/README.md > /dev/stderr
+exec "$@"
+EOF
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 50021
+
+USER user
+WORKDIR /opt/voicevox_engine
+
+ENTRYPOINT ["/entrypoint.sh"]
+# --use_gpu flags turns on the CUDA execution provider inside voicevox_core.
+# --runtime_dir points at our custom-built sm_120 ORT.
+CMD ["python3", "./run.py", \
+     "--use_gpu", \
+     "--voicelib_dir", "/opt/voicevox_core/", \
+     "--runtime_dir", "/opt/onnxruntime/lib", \
+     "--host", "0.0.0.0", \
+     "--port", "50021"]

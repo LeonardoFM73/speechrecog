@@ -25,9 +25,13 @@ frontend/out/
 Thumbs.db
 
 # Docker
-Dockerfile.*
-.dockerignore
+# Note: Dockerfile.* excluded only for BACKEND build (uses Dockerfile.backend).
+# For voicevox build, switch context or use a more specific pattern via
+# `dockerfile` key + `context` key — explicitly referenced Dockerfiles are
+# generally preserved by Docker.
 docker-compose.yml
+docker-compose.*.yml
 
 # Docs
 README.md
+Summary.md
