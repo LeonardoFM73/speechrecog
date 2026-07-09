@@ -156,9 +156,11 @@ RUN git clone --branch ${VOICEVOX_ENGINE_VERSION} --depth 1 \
         https://github.com/VOICEVOX/voicevox_engine.git .
 
 # Install Python deps the engine needs (inside /opt/venv).
+# --no-build-isolation is required: pip otherwise creates a fresh build env
+# in /tmp that has no cmake, so pyopenjtalk's setup.py fails.
 RUN . /opt/venv/bin/activate && \
     pip install --upgrade pip setuptools wheel && \
-    pip install -r requirements.txt
+    pip install --no-build-isolation -r requirements.txt
 
 # Set runtime PATH so the venv Python + pip are found.
 ENV PATH="/opt/venv/bin:$PATH"
