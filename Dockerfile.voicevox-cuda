@@ -131,7 +131,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3.11 \
         python3.11-dev \
         python3.11-venv \
-        python3-pip \
         git \
         wget \
         ca-certificates \
@@ -139,10 +138,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         gosu \
     && rm -rf /var/lib/apt/lists/* && \
-    ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
-    # pyopenjtalk's htsengine submodule has cmake_minimum_required(VERSION 3.1)
-    # which is rejected by CMake 4.x+. Install 3.28.x (last 3.x series).
-    pip install --no-cache-dir "cmake<4"
+    ln -sf /usr/bin/python3.11 /usr/bin/python3
+
+# Use uv to manage Python deps in an isolated venv (no root-pip warnings).
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/uv && \
+    uv venv /opt/venv --python python3.11 && \
+    . /opt/venv/bin/activate && \
+    uv pip install "cmake<4" "pip" "setuptools" "wheel"
 
 WORKDIR /opt/voicevox_engine
 
@@ -150,9 +155,13 @@ WORKDIR /opt/voicevox_engine
 RUN git clone --branch ${VOICEVOX_ENGINE_VERSION} --depth 1 \
         https://github.com/VOICEVOX/voicevox_engine.git .
 
-# Install Python deps the engine needs.
-RUN python3 -m pip install --upgrade "pip" "setuptools" wheel && \
-    python3 -m pip install -r requirements.txt
+# Install Python deps the engine needs (inside /opt/venv).
+RUN . /opt/venv/bin/activate && \
+    pip install --upgrade pip setuptools wheel && \
+    pip install -r requirements.txt
+
+# Set runtime PATH so the venv Python + pip are found.
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Bring in the prebuilt voicevox_core (GPU).
 COPY --from=voicevox-core-downloader /opt/voicevox_core /opt/voicevox_core
