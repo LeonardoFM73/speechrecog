@@ -155,12 +155,35 @@ WORKDIR /opt/voicevox_engine
 RUN git clone --branch ${VOICEVOX_ENGINE_VERSION} --depth 1 \
         https://github.com/VOICEVOX/voicevox_engine.git .
 
-# Install Python deps the engine needs (inside /opt/venv).
-# --no-build-isolation is required: pip otherwise creates a fresh build env
-# in /tmp that has no cmake, so pyopenjtalk's setup.py fails.
+# pyopenjtalk's htsengine submodule declares cmake_minimum_required(3.1)
+# which CMake 4.x rejects. Patch it via a helper that monkey-patches
+# the submodule's CMakeLists.txt when pyopenjtalk is checked out.
+# We use `git+https://...` and run a small `prep.sh` after the clone.
+
+# Pre-install build deps so --no-build-isolation works.
 RUN . /opt/venv/bin/activate && \
-    pip install --upgrade pip setuptools wheel && \
-    pip install --no-build-isolation -r requirements.txt
+    pip install numpy cython cmake
+
+# Copy the prep script (patches the submodule) into the image.
+COPY prep_pyopenjtalk.sh /opt/prep_pyopenjtalk.sh
+RUN chmod +x /opt/prep_pyopenjtalk.sh
+
+# Clone, patch submodule, then install.
+RUN . /opt/venv/bin/activate && \
+    cd /opt && \
+    git clone --depth 1 --recursive \
+        https://github.com/VOICEVOX/pyopenjtalk.git && \
+    cd pyopenjtalk && \
+    git fetch --depth 1 origin b35fc89fe42948a28e33aed886ea145a51113f88 && \
+    git checkout b35fc89fe42948a28e33aed886ea145a51113f88 && \
+    /opt/prep_pyopenjtalk.sh && \
+    pip install --no-build-isolation .
+
+# Now install the rest of the engine requirements (everything except pyopenjtalk).
+# Remove the pyopenjtalk line so the fresh local install isn't re-fetched.
+RUN . /opt/venv/bin/activate && \
+    grep -v "^pyopenjtalk" requirements.txt > /tmp/req.txt && \
+    pip install -r /tmp/req.txt
 
 # Set runtime PATH so the venv Python + pip are found.
 ENV PATH="/opt/venv/bin:$PATH"
