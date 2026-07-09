@@ -88,12 +88,18 @@ RUN mkdir -p /opt/ort-libs && \
     cp -P /opt/build/RelWithDebInfo/libonnxruntime_providers_*.so /opt/ort-libs/ || true
 
 # -----------------------------------------------------------------------------
-# Stage 2: Download prebuilt voicevox_core (GPU build) — no Rust compile
+# Stage 2: Download prebuilt voicevox_core — no Rust compile
+# -----------------------------------------------------------------------------
+# Since 0.16.0, voicevox_core no longer ships separate GPU binaries.
+# The same CPU libcore.so handles GPU inference when:
+#   1. CUDA ORT libs are available at runtime (we provide via Stage 1)
+#   2. voicevox_engine is started with --use_gpu / acceleration_mode=GPU
+# So we use the plain `voicevox_core-linux-x64` archive (302 = OK).
 # -----------------------------------------------------------------------------
 FROM ubuntu:22.04 AS voicevox-core-downloader
 
 ARG VOICEVOX_CORE_VERSION=0.16.4
-ARG VOICEVOX_CORE_ASSET=voicevox_core-linux-x64-gpu-${VOICEVOX_CORE_VERSION}
+ARG VOICEVOX_CORE_ASSET=voicevox_core-linux-x64-${VOICEVOX_CORE_VERSION}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         wget unzip ca-certificates \
@@ -101,7 +107,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /work
 
-# Official prebuilt GPU release — includes libcore.so + Python binding.
+# Official prebuilt release — includes libcore.so + Python binding.
 # It dynamically loads libonnxruntime.so from --runtime_dir at startup,
 # so we can swap our custom-built ORT without recompiling the Rust core.
 RUN wget -q -O ${VOICEVOX_CORE_ASSET}.zip \
@@ -110,7 +116,6 @@ RUN wget -q -O ${VOICEVOX_CORE_ASSET}.zip \
     mkdir -p /opt/voicevox_core && \
     mv ${VOICEVOX_CORE_ASSET}/libcore.so /opt/voicevox_core/ && \
     mv ${VOICEVOX_CORE_ASSET}/*.so.* /opt/voicevox_core/ 2>/dev/null || true && \
-    mv ${VOICEVOX_CORE_ASSET}/VERSION /opt/voicevox_core/ && \
     rm -rf ${VOICEVOX_CORE_ASSET} ${VOICEVOX_CORE_ASSET}.zip
 
 # -----------------------------------------------------------------------------

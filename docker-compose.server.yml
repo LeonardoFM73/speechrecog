@@ -73,7 +73,6 @@ services:
       dockerfile: Dockerfile.voicevox-cuda
     image: localhost/voicevox_engine_cuda_sm120:latest
     container_name: stt-voicevox
-    container_name: stt-voicevox
     restart: unless-stopped
     init: true
 
