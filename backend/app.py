@@ -241,7 +241,7 @@ async def chat(req: ChatRequest) -> Any:
     ]
 
     try:
-        result = chat_service.get_service().chat(
+        result = await chat_service.get_service().chat(
             user_text=req.user_text,
             scenario=req.scenario,
             history=req.history,  # history BEFORE this user turn
