@@ -65,18 +65,18 @@ async def lifespan(app: FastAPI):
     initialise(model_size="medium", device=device, compute_type="float16" if device == "cuda" else "int8")
     logger.info("FastAPI application started — device=%s", get_service().current_device)
 
-    # Chat (LLM) service — optional. If GEMINI_API_KEY is missing, log a warning
-    # and continue; /chat will return 503 until the key is provided.
+    # Chat (LLM) service — optional. If OPENAI_BASE_URL is unset, log a warning
+    # and continue; /chat will return 503 until the endpoint is reachable.
     try:
         chat_service.initialise()
-        logger.info("Chat service ready (Gemini)")
+        logger.info("Chat service ready (OpenAI-compatible)")
     except RuntimeError as exc:
-        logger.warning("Chat service disabled: %s (set GEMINI_API_KEY to enable)", exc)
+        logger.warning("Chat service disabled: %s (set OPENAI_BASE_URL to enable)", exc)
 
     # TTS (VOICEVOX) service — optional. If the engine is unreachable,
     # log a warning and continue; /tts will return 503 until the engine comes up.
     try:
-        voicevox_url = os.environ.get("VOICEVOX_URL", "http://localhost:50021")
+        voicevox_url = os.environ.get("VOICEVOX_URL", "http://10.100.101.12:50021")
         voicevox_speaker = int(os.environ.get("VOICEVOX_DEFAULT_SPEAKER", "2"))
         await tts_service.initialise(base_url=voicevox_url, default_speaker=voicevox_speaker)
         logger.info("TTS service ready (VOICEVOX)")
@@ -88,6 +88,12 @@ async def lifespan(app: FastAPI):
     # TTS shutdown — close HTTP client
     try:
         await tts_service.aclose()
+    except Exception:
+        pass
+
+    # Chat shutdown — close HTTP client
+    try:
+        await chat_service.aclose()
     except Exception:
         pass
 
@@ -226,7 +232,7 @@ async def chat(req: ChatRequest) -> Any:
     if not chat_service.is_ready():
         raise HTTPException(
             status_code=503,
-            detail="Chat service is not available. Set GEMINI_API_KEY and restart the backend.",
+            detail="Chat service is not available. Set OPENAI_BASE_URL and restart the backend.",
         )
 
     # Build the new history (current user turn appended, model's turn appended at end).

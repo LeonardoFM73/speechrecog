@@ -44,10 +44,12 @@ services:
       - PYTHONUNBUFFERED=1
       - NVIDIA_VISIBLE_DEVICES=all
       - HF_HOME=/app/.cache/huggingface
-      # LLM (Gemini) — required for /chat. Leave empty to disable chat.
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      # TTS (VOICEVOX) — required for /tts (audio replies).
-      - VOICEVOX_URL=http://voicevox:50021
+      # LLM (OpenAI-compatible) — required for /chat. Leave empty to disable chat.
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-http://10.100.101.12:5091/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-EMPTY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-qwen35-9b}
+      # TTS (VOICEVOX on LAN host) — required for /tts (audio replies).
+      - VOICEVOX_URL=http://${VOICEVOX_HOST:-10.100.101.12}:${VOICEVOX_PORT:-50021}
       - VOICEVOX_DEFAULT_SPEAKER=${VOICEVOX_DEFAULT_SPEAKER:-2}
 
     # Health check — waits for model to load
@@ -58,8 +60,7 @@ services:
       retries: 5
       start_period: 90s
 
-    depends_on:
-      - voicevox
+    # No depends_on — VOICEVOX runs on LAN host, not inside compose.
 
     volumes:
       # Persist downloaded model weights between restarts (~2-4 GB)
@@ -102,41 +103,8 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ──────────────── VOICEVOX TTS Engine ────────────────
-  # Local Japanese text-to-speech engine. Image ~1.9 GB; first run needs
-  # ~1-2 min to boot. Switch image to voicevox/voicevox_engine:cpu-latest
-  # for environments without an NVIDIA GPU.
-  voicevox:
-    image: voicevox/voicevox_engine:nvidia-latest
-    container_name: stt-voicevox
-    restart: unless-stopped
-    init: true
-
-    # GPU passthrough — same stanza as the backend. Remove for CPU-only.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-    ports:
-      - "${VOICEVOX_PORT:-50021}:50021"
-
-    # Engine startup is heavy — give it room to load VVM models.
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:50021/version >/dev/null || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 90s
-
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+  # Note: VOICEVOX runs on LAN host (not in compose).
+  # Adjust VOICEVOX_HOST/PORT in .env to match.
 
 # ──────────────── Volumes ────────────────
 volumes:

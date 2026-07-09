@@ -1,7 +1,8 @@
 """Chat service — LLM-powered Japanese conversation partner.
 
 Singleton pattern, parallel to services/transcriber.py.
-Provider: Google Gemini (default). GEMINI_API_KEY must be set in env.
+Provider: any OpenAI-compatible chat-completions endpoint (e.g. vLLM).
+Configured via OPENAI_BASE_URL and OPENAI_API_KEY.
 """
 
 from __future__ import annotations
@@ -9,13 +10,11 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Literal
+from typing import Any
 
-from google import genai
+import httpx
 
 logger = logging.getLogger(__name__)
-
-ProviderName = Literal["gemini"]
 
 
 # ---------------------------------------------------------------------------
@@ -49,20 +48,25 @@ DEFAULT_SCENARIO = (
 # Service
 # ---------------------------------------------------------------------------
 class ChatService:
-    """Wraps a single Gemini client. Initialised once at app startup."""
+    """Thin async wrapper around an OpenAI-compatible chat-completions endpoint."""
 
     _instance: "ChatService | None" = None
-    _client: genai.Client | None = None
-    _model: str = "gemini-2.5-flash"
+    _client: httpx.AsyncClient | None = None
+    _model: str = "qwen35-9b"
 
     def __init__(self) -> None:
-        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        if not api_key:
-            raise RuntimeError(
-                "GEMINI_API_KEY env var is not set — chat service cannot start"
-            )
-        self._client = genai.Client(api_key=api_key)
-        logger.info("ChatService initialised with Gemini model=%s", self._model)
+        self._base_url = os.environ.get(
+            "OPENAI_BASE_URL", "http://10.100.101.12:5091/v1"
+        ).rstrip("/")
+        self._api_key = os.environ.get("OPENAI_API_KEY", "EMPTY").strip() or "EMPTY"
+        self._model = os.environ.get("OPENAI_MODEL", self._model).strip()
+        timeout = float(os.environ.get("OPENAI_TIMEOUT", "60"))
+        self._client = httpx.AsyncClient(timeout=timeout)
+        logger.info(
+            "ChatService initialised base_url=%s model=%s",
+            self._base_url,
+            self._model,
+        )
 
     # ------------------------------------------------------------------
     @classmethod
@@ -82,19 +86,24 @@ class ChatService:
     def is_loaded(self) -> bool:
         return self._client is not None
 
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
     # ------------------------------------------------------------------
-    def chat(
+    async def chat(
         self,
         user_text: str,
         scenario: str,
         history: list[dict],
     ) -> dict[str, str]:
-        """Send user text + scenario + history to Gemini, return parsed reply.
+        """Send user text + scenario + history to the LLM, return parsed reply.
 
         Args:
             user_text: What the user just said (in Japanese).
             scenario: System-prompt scenario description.
-            history: Prior turns, list of {"role": "user"|"model", "text": "..."}.
+            history: Prior turns, list of {"role": "user"|"assistant", "text": "..."}.
                      The current user_text should NOT be in history (it is added
                      by the endpoint).
 
@@ -118,6 +127,13 @@ class ChatService:
             history_text=history_text,
         )
 
+        # OpenAI-compatible: system goes as a system message; user turn appended.
+        messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+        for m in history[-10:]:
+            role = "assistant" if m["role"] == "model" else "user"
+            messages.append({"role": role, "content": m["text"]})
+        messages.append({"role": "user", "content": user_text})
+
         logger.info(
             "Chat request: scenario_len=%d history_turns=%d user_chars=%d",
             len(scenario or ""),
@@ -125,17 +141,33 @@ class ChatService:
             len(user_text),
         )
 
-        response = self._client.models.generate_content(
-            model=self._model,
-            contents=user_text,
-            config={
-                "system_instruction": system_prompt,
-                "temperature": 0.7,
-                "response_mime_type": "application/json",
-            },
-        )
+        try:
+            resp = await self._client.post(
+                f"{self._base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self._model,
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "response_format": {"type": "json_object"},
+                },
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.error("LLM HTTP error: %s", exc)
+            raise
 
-        raw: str = response.text or ""
+        data = resp.json()
+        raw: str = ""
+        try:
+            raw = data["choices"][0]["message"]["content"] or ""
+        except (KeyError, IndexError, TypeError) as exc:
+            logger.error("Unexpected LLM response shape: %s\nPayload: %s", exc, data)
+            raise ValueError(f"Unexpected LLM response shape: {exc}") from exc
+
         parsed: dict[str, Any] = self._parse_json(raw)
 
         return {
@@ -187,9 +219,17 @@ def is_ready() -> bool:
 
 
 def initialise() -> ChatService:
-    """Create the singleton (idempotent). Raises if GEMINI_API_KEY is missing."""
+    """Create the singleton (idempotent)."""
     global _chat_service
     if _chat_service is not None:
         return _chat_service
     _chat_service = ChatService.initialise()
     return _chat_service
+
+
+async def aclose() -> None:
+    """Close the underlying HTTP client. Idempotent."""
+    global _chat_service
+    if _chat_service is not None:
+        await _chat_service.aclose()
+        _chat_service = None
