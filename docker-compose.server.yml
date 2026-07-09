@@ -65,13 +65,9 @@ services:
         max-file: "3"
 
   # ──────────────── VOICEVOX TTS Engine ────────────────
-  # Built from source with CUDA 12.8 + sm_120 for RTX 5090.
-  # Long first build (~2-3 hrs) — Docker layer caches after.
+  # Official upstream image with CUDA support preconfigured.
   voicevox:
-    build:
-      context: .
-      dockerfile: Dockerfile.voicevox-cuda
-    image: localhost/voicevox_engine_cuda_sm120:latest
+    image: voicevox/voicevox_engine:nvidia-0.26.0-dev
     container_name: stt-voicevox
     restart: unless-stopped
     init: true
@@ -94,7 +90,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 90s
+      start_period: 120s
 
     logging:
       driver: json-file
