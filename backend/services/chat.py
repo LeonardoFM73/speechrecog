@@ -118,7 +118,7 @@ class ChatService:
 
         # Truncate to last 10 turns to bound token cost.
         history_text = "\n".join(
-            f"{'User' if m['role'] == 'user' else 'You'}: {m['text']}"
+            f"{'User' if m.role == 'user' else 'You'}: {m.text}"
             for m in history[-10:]
         ) or "(no prior messages)"
 
@@ -130,8 +130,8 @@ class ChatService:
         # OpenAI-compatible: system goes as a system message; user turn appended.
         messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
         for m in history[-10:]:
-            role = "assistant" if m["role"] == "model" else "user"
-            messages.append({"role": role, "content": m["text"]})
+            role = "assistant" if m.role == "model" else "user"
+            messages.append({"role": role, "content": m.text})
         messages.append({"role": "user", "content": user_text})
 
         logger.info(
