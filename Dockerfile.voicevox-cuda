@@ -23,17 +23,12 @@ ARG ORT_VERSION=v1.21.0
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Toolchain + Python deps for ONNX Runtime build.
-# ONNX Runtime 1.21's FetchContent/Eigen expects CMake < 4. Ubuntu 22.04's
-# apt cmake (3.22) passes; CMake 4.x breaks FetchContent + FindPython.
-# We install cmake via pip (3.31) afterwards so pyopenjtalk can find it,
-# but for the ORT build stage we ensure apt cmake (3.22) is used by ordering
-# /usr/bin before /usr/local in PATH during build.
-# NOTE: eigen provided via apt (libeigen3-dev) — avoids GitLab/GitHub rate
-# limiting issues with the official tarball URLs. Pre-installed eigen3
-# supports find_package(Eigen3 CONFIG) legacy mode.
+# ONNX Runtime 1.21 needs CMake >= 3.28 (< 4). Ubuntu 22.04 apt only has
+# 3.22, so we install CMake 3.31 from the Kitware apt repo.
+# Eigen 3.4.0 is pulled from apt (libeigen3-dev) to avoid GitLab/GitHub
+# rate-limit issues with the official tarball URLs.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
-        cmake \
         git \
         libeigen3-dev \
         python3 \
@@ -41,10 +36,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-dev \
         wget \
         ca-certificates \
+        gpg \
         libcurl4-openssl-dev \
         libssl-dev \
         zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Install CMake 3.31 from Kitware official tarball (more reliable than apt).
+RUN wget -q https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-linux-x86_64.tar.gz -O /tmp/cmake.tar.gz && \
+    tar -xzf /tmp/cmake.tar.gz -C /opt && \
+    ln -sf /opt/cmake-3.31.6-linux-x86_64/bin/cmake /usr/local/bin/cmake && \
+    rm /tmp/cmake.tar.gz && \
+    cmake --version
 
 # cuDNN runtime headers — required by ORT's CUDA EP build.
 # On nvidia/cuda:12.8.0-devel images, libcudnn ships with the base.
