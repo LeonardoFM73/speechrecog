@@ -15,22 +15,22 @@ FROM ubuntu:22.04 AS ort-builder
 ARG DEBIAN_FRONTEND=noninteractive
 ARG ONNXRUNTIME_VERSION=1.17.1
 
-# Install python3.12 (for cp312 GPU wheel) and pip
+# Install python3.10 (for cp310 GPU wheel) and pip
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3.12 \
-        python3.12-venv \
-        python3.12-dev \
+        python3.10 \
+        python3.10-venv \
+        python3.10-dev \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Create venv with Python 3.12 and install onnxruntime-gpu wheel
+# Create venv with Python 3.10 and install onnxruntime-gpu wheel
 RUN mkdir -p /tmp/ort-venv && \
-    python3.12 -m venv /tmp/ort-venv && \
+    python3.10 -m venv /tmp/ort-venv && \
     /tmp/ort-venv/bin/pip install --no-cache-dir "onnxruntime-gpu==${ONNXRUNTIME_VERSION}"
 
 # Copy all .so files from the wheel's onnxruntime/capi/ to /opt/onnxruntime/lib/
 RUN mkdir -p /opt/onnxruntime/lib && \
-    find /tmp/ort-venv/lib/python3.12/site-packages/onnxruntime/capi -name "*.so*" -exec cp -P {} /opt/onnxruntime/lib/ \; && \
+    find /tmp/ort-venv/lib/python3.10/site-packages/onnxruntime/capi -name "*.so*" -exec cp -P {} /opt/onnxruntime/lib/ \; && \
     # Create symlinks for versioned soname resolution
     cd /opt/onnxruntime/lib && \
     ln -sf libonnxruntime.so.1.17.1 libonnxruntime.so.1 && \
