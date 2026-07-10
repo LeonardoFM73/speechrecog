@@ -136,9 +136,11 @@ RUN python3 ./tools/ci_build/build.py \
         --update
 
 # After build, stage the produced shared libraries into a clean dir.
+# Try multiple possible output paths from build.py.
 RUN mkdir -p /opt/ort-libs && \
-    cp -P /opt/build/RelWithDebInfo/libonnxruntime.so* /opt/ort-libs/ && \
-    cp -P /opt/build/RelWithDebInfo/libonnxruntime_providers_*.so /opt/ort-libs/ || true
+    find /opt/build -name 'libonnxruntime.so*' -exec cp -P {} /opt/ort-libs/ \; 2>/dev/null && \
+    find /opt/build -name 'libonnxruntime_providers_*.so*' -exec cp -P {} /opt/ort-libs/ \; 2>/dev/null; \
+    echo "ORT libs:" && ls -la /opt/ort-libs/
 
 # -----------------------------------------------------------------------------
 # Stage 2: Download prebuilt voicevox_core — no Rust compile
