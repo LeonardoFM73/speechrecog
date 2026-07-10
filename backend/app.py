@@ -62,7 +62,8 @@ async def lifespan(app: FastAPI):
         device = "cpu"
         logger.info("torch not installed → using CPU")
 
-    initialise(model_size="medium", device=device, compute_type="float16" if device == "cuda" else "int8")
+    model_size = os.environ.get("WHISPER_MODEL_SIZE", "large")
+    initialise(model_size=model_size, device=device, compute_type="float16" if device == "cuda" else "int8")
     logger.info("FastAPI application started — device=%s", get_service().current_device)
 
     # Chat (LLM) service — optional. If OPENAI_BASE_URL is unset, log a warning
@@ -108,7 +109,7 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 app = FastAPI(
     title="Japanese Speech-to-Text",
-    description="Local transcription using Faster-Whisper Medium",
+    description="Local transcription using Faster-Whisper Large",
     version="1.0.0",
     lifespan=lifespan,
 )
