@@ -55,7 +55,7 @@ RUN wget -q https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.3
 RUN git clone --depth 1 https://gitlab.com/libeigen/eigen.git /opt/eigen-src && \
     cd /opt/eigen-src && \
     git tag | grep '^eigen-3.4.0' && git checkout eigen-3.4.0 2>/dev/null || \
-    git checkout main && \
+    git checkout master && \
     mkdir -p /usr/local/include/eigen3 && \
     cp -R Eigen unsupported /usr/local/include/eigen3/ && \
     mkdir -p /usr/local/lib/cmake/Eigen3 && \
