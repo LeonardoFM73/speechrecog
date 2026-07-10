@@ -15,22 +15,22 @@ FROM ubuntu:22.04 AS ort-builder
 ARG DEBIAN_FRONTEND=noninteractive
 ARG ONNXRUNTIME_VERSION=1.23.2
 
+# Install python3.10 (for cp310 GPU wheel) and pip
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3 \
-        python3-pip \
+        python3.10 \
+        python3.10-venv \
+        python3.10-dev \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install onnxruntime-gpu via pip (prebuilt cp314 wheel available)
-RUN pip install --no-cache-dir "onnxruntime-gpu==${ONNXRUNTIME_VERSION}"
+# Create venv with Python 3.10 and install onnxruntime-gpu wheel
+RUN mkdir -p /tmp/ort-venv && \
+    python3.10 -m venv /tmp/ort-venv && \
+    /tmp/ort-venv/bin/pip install --no-cache-dir "onnxruntime-gpu==${ONNXRUNTIME_VERSION}"
 
-# Locate the onnxruntime package dir and copy all .so files
-RUN mkdir -p /opt/onnxruntime/lib && \
-    ORT_DIR=$(python3 -c "import onnxruntime; print(onnxruntime.__path__[0])") && \
-    echo "ORT package at: $ORT_DIR" && \
-    ls -la "$ORT_DIR" && \
-    cp -P "$ORT_DIR"/*.so* /opt/onnxruntime/lib/ && \
-    ls -la /opt/onnxruntime/lib/ && file /opt/onnxruntime/lib/*
+# List all files in the installed package to find .so locations
+RUN echo "=== Full onnxruntime package tree ===" && \
+    find /tmp/ort-venv/lib/python3.10/site-packages/onnxruntime -type f 2>/dev/null | sort
 
 # -----------------------------------------------------------------------------
 # Stage 2: Download prebuilt voicevox_core — no Rust compile
