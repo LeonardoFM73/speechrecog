@@ -109,12 +109,14 @@ RUN wc -l /opt/onnxruntime/cmake/external/eigen.cmake && cat /opt/onnxruntime/cm
 # Install ONNX Runtime CUDA wheel directly — prebuilt, no compile needed.
 # We need libonnxruntime.so exposed in a known path for voicevox_core linking.
 ARG ONNXRUNTIME_VERSION=1.21.0
-RUN pip install --no-cache-dir "onnxruntime-gpu==${ONNXRUNTIME_VERSION}"
+RUN mkdir -p /tmp/ort-staging && \
+    pip install --no-cache-dir --target /tmp/ort-staging "onnxruntime-gpu==${ONNXRUNTIME_VERSION}" && \
+    mkdir -p /opt/onnxruntime/lib && \
+    cp /tmp/ort-staging/onnxruntime/onnxruntime*.so* /opt/onnxruntime/lib/
 
-# Extract the shared library from the wheel's site-packages
-# We need libonnxruntime.so exposed in /opt/onnxruntime/lib/ for voicevox_core dlopen
-RUN mkdir -p /opt/onnxruntime/lib && \
-    cp $(python3 -c "import onnxruntime; print(onnxruntime.__path__[0])")/*.so* /opt/onnxruntime/lib/
+# Verify what we got
+RUN ls -la /opt/onnxruntime/lib/ && \
+    file /opt/onnxruntime/lib/*
 
 # -----------------------------------------------------------------------------
 # Stage 2: Download prebuilt voicevox_core — no Rust compile
