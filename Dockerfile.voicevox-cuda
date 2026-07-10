@@ -109,13 +109,16 @@ RUN wc -l /opt/onnxruntime/cmake/external/eigen.cmake && cat /opt/onnxruntime/cm
 # Install ONNX Runtime CUDA wheel directly — prebuilt, no compile needed.
 # We need libonnxruntime.so exposed in a known path for voicevox_core linking.
 ARG ONNXRUNTIME_VERSION=1.21.0
-RUN uv pip install "onnxruntime-gpu==${ONNXRUNTIME_VERSION}" && \
+RUN pip install --no-cache-dir "onnxruntime-gpu==${ONNXRUNTIME_VERSION}" && \
     python3 -c "\
-import onnxruntime, os, shutil;\
+import onnxruntime, os, shutil, sys;\
 pkg = os.path.dirname(onnxruntime.__file__);\
-dst = '/opt/onnxruntime/lib/';\
-[shutil.copy2(os.path.join(pkg, f), dst) for f in os.listdir(pkg) if f.endswith('.so') or f.startswith('libonnx')]\
-" 2>/dev/null || true
+dst = '/opt/onnxruntime/lib/';\nos.makedirs(dst, exist_ok=True);\
+for f in os.listdir(pkg):\
+    fp = os.path.join(pkg, f);\
+    if os.path.isfile(fp) and (f.endswith('.so') or f.startswith('libonnx')):\
+        shutil.copy2(fp, dst)\
+"
 RUN ls -la /opt/onnxruntime/lib/
 
 # -----------------------------------------------------------------------------
