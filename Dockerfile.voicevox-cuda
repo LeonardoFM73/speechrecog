@@ -88,6 +88,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* && \
     ln -sf /usr/bin/python3.11 /usr/bin/python3
 
+# Install cuDNN 8 + NCCL — ONNX Runtime CUDA provider needs libcudnn.so.8.
+# CUDA 12.x compatible cuDNN 8 available via NVIDIA apt repo.
+RUN apt-get update && apt-get install -y --no-install-recommends gnupg2 curl ca-certificates && \
+    curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub | gpg --dearmor -o /usr/share/keyrings/cuda-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" > /etc/apt/sources.list.d/cuda.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
+        libcudnn8=8.9.* \
+        libnccl2=2.19.* \
+    && rm -rf /var/lib/apt/lists/* && \
+    ldconfig
+
 # Install uv and set up the isolated venv.
 RUN apt-get update && apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/* && \
