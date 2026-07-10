@@ -67,18 +67,12 @@ services:
   # ──────────────── VOICEVOX TTS Engine ────────────────
   # Official upstream image with CUDA support preconfigured.
   voicevox:
-    image: voicevox/voicevox_engine:nvidia-0.26.0-dev
+    image: voicevox/voicevox_engine:cpu-latest
     container_name: stt-voicevox
     restart: unless-stopped
     init: true
-
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    environment:
+      - VV_CPU_NUM_THREADS=44
 
     # Bound only to the server's loopback — only the backend reaches it,
     # never the open LAN.
