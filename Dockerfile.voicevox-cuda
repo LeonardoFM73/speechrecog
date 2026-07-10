@@ -21,17 +21,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install CPU ONNX Runtime into a staging dir
+# Install ONNX Runtime GPU via pip (prebuilt wheel — no compile).
+# We need CUDA EP for RTX 5090 acceleration.
+# Use cp312 wheel (max supported GPU wheel version).
+ARG ONNXRUNTIME_VERSION=1.21.0
+ARG PYTHON_VER=3.10
+
+# Install a compatible Python for building/staging the GPU wheel
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.10 \
+        python3.10-venv \
+        python3.10-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create venv with Python 3.10 and install onnxruntime-gpu wheel there
 RUN mkdir -p /tmp/ort-staging && \
-    pip install --no-cache-dir --target /tmp/ort-staging "onnxruntime==${ONNXRUNTIME_VERSION}"
+    python3.10 -m venv /tmp/ort-venv && \
+    /tmp/ort-venv/bin/pip install --no-cache-dir "onnxruntime-gpu==${ONNXRUNTIME_VERSION}"
 
-# Copy all .so files (the compiled ORT library) to a clean lib dir
+# Find all .so files from the wheel's site-packages/onnxruntime
 RUN mkdir -p /opt/onnxruntime/lib && \
-    cp /tmp/ort-staging/onnxruntime/*.so* /opt/onnxruntime/lib/ 2>/dev/null || true && \
-    find /tmp/ort-staging -name "onnxruntime*.so*" -exec cp -P {} /opt/onnxruntime/lib/ \;
-
-# Verify
-RUN ls -la /opt/onnxruntime/lib/ && file /opt/onnxruntime/lib/*
+    cp -P /tmp/ort-venv/lib/python3.10/site-packages/onnxruntime/*.so* /opt/onnxruntime/lib/ 2>/dev/null || true && \
+    find /tmp/ort-venv/lib/python3.10/site-packages/onnxruntime -name "*.so*" -exec ls -la {} \;
 
 # -----------------------------------------------------------------------------
 # Stage 2: Download prebuilt voicevox_core — no Rust compile
@@ -161,9 +172,10 @@ USER user
 WORKDIR /opt/voicevox_engine
 
 ENTRYPOINT ["/entrypoint.sh"]
-# --runtime_dir points at our ORT shared library.
-# Removed --use_gpu: server has Python 3.14, no GPU wheel available.
+# --use_gpu flags turns on the CUDA execution provider inside voicevox_core.
+# --runtime_dir points at our GPU-enabled ORT.
 CMD ["python3", "./run.py", \
+     "--use_gpu", \
      "--voicelib_dir", "/opt/voicevox_core/", \
      "--runtime_dir", "/opt/onnxruntime/lib", \
      "--host", "0.0.0.0", \
