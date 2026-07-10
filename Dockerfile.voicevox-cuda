@@ -86,25 +86,25 @@ RUN python3 -m pip install --upgrade "pip==23.3.1" "setuptools>=68" wheel
 # Write a simple eigen.cmake that:
 # 1. Skips the GitLab download entirely (set eigen_POPULATED so FetchContent doesn't try)
 # 2. Creates Eigen3::Eigen INTERFACE IMPORTED target pointing to /opt/eigen-3.4.0
-RUN cat > /opt/onnxruntime/cmake/external/eigen.cmake <<'EIGENPATCH'
-set(EIGEN_BUILD_DOC OFF CACHE BOOL "" FORCE)
-set(EIGEN_BUILD_BLAS OFF CACHE BOOL "" FORCE)
-set(EIGEN_BUILD_LAPACK OFF CACHE BOOL "" FORCE)
-set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "" FORCE)
-
-# Force skip FetchContent download (GitLab hash mismatch)
-set(eigen_POPULATED TRUE CACHE INTERNAL "Already provided via eigen_path")
-
-# Create Eigen3::Eigen INTERFACE IMPORTED target
-# Using explicit path instead of ${eigen_SOURCE_PATH} which may not propagate
-# correctly from build.py --cmake_extra_defines chain.
-add_library(Eigen3::Eigen INTERFACE IMPORTED)
-set_target_properties(Eigen3::Eigen PROPERTIES
-    INTERFACE_INCLUDE_DIRECTORIES "/opt/eigen-3.4.0")
-EIGENPATCH
+# Using printf (not heredoc) to avoid Docker build heredoc edge-case bugs.
+RUN printf '%s\n' \
+  'set(EIGEN_BUILD_DOC OFF CACHE BOOL "" FORCE)' \
+  'set(EIGEN_BUILD_BLAS OFF CACHE BOOL "" FORCE)' \
+  'set(EIGEN_BUILD_LAPACK OFF CACHE BOOL "" FORCE)' \
+  'set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "" FORCE)' \
+  '' \
+  '# Force skip FetchContent download (GitLab hash mismatch)' \
+  'set(eigen_POPULATED TRUE CACHE INTERNAL "Already provided via eigen_path")' \
+  '' \
+  '# Create Eigen3::Eigen INTERFACE IMPORTED target' \
+  'add_library(Eigen3::Eigen INTERFACE IMPORTED)' \
+  'set_target_properties(Eigen3::Eigen PROPERTIES' \
+  '    INTERFACE_INCLUDE_DIRECTORIES "/opt/eigen-3.4.0")' \
+  '' \
+  > /opt/onnxruntime/cmake/external/eigen.cmake
 
 # Verify the patch landed correctly
-RUN test -s /opt/onnxruntime/cmake/external/eigen.cmake && echo "eigen.cmake OK: $(wc -l < /opt/onnxruntime/cmake/external/eigen.cmake) lines"
+RUN wc -l /opt/onnxruntime/cmake/external/eigen.cmake && cat /opt/onnxruntime/cmake/external/eigen.cmake
 
 # Configure + build ORT with CUDA EP, sm_120 kernels, shared libs.
 # Key flags:
