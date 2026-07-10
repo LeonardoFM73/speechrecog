@@ -104,13 +104,14 @@ set(EIGEN_BUILD_BLAS OFF CACHE BOOL "" FORCE)
 set(EIGEN_BUILD_LAPACK OFF CACHE BOOL "" FORCE)
 set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "" FORCE)
 
-# When USE_PREINSTALLED_EIGEN is ON, skip the download entirely.
-# The headers are already in eigen_SOURCE_PATH (set via --cmake_extra_defines).
 if(onnxruntime_USE_PREINSTALLED_EIGEN)
     message(STATUS "Using pre-installed Eigen from: ${eigen_SOURCE_PATH}")
-    set(eigen_POPULATE_SOURCE_DIR "${eigen_SOURCE_PATH}")
-    set(eigen_POPULATE_BINARY_DIR "${eigen_SOURCE_PATH}")
-    set(eigen_POPULATED 1)
+    # Create Eigen3::Eigen IMPORTED target — ORT's CMakeLists link against this.
+    if(NOT TARGET Eigen3::Eigen)
+        add_library(Eigen3::Eigen INTERFACE IMPORTED)
+        set_target_properties(Eigen3::Eigen PROPERTIES
+            INTERFACE_INCLUDE_DIRECTORIES "${eigen_SOURCE_PATH}")
+    endif()
 else()
     onnxruntime_fetchcontent_declare(
         eigen
@@ -119,7 +120,9 @@ else()
         EXCLUDE_FROM_ALL
     )
 endif()
-onnxruntime_fetchcontent_makeavailable(eigen)
+if(NOT onnxruntime_USE_PREINSTALLED_EIGEN)
+    onnxruntime_fetchcontent_makeavailable(eigen)
+endif()
 EIGENPATCH
 
 # Configure + build ORT with CUDA EP, sm_120 kernels, shared libs.
