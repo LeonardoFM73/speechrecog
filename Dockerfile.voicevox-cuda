@@ -8,33 +8,32 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Get GPU-enabled ONNX Runtime via pip (prebuilt wheel, no compile)
+# Stage 1: Get GPU-enabled ONNX Runtime 1.17.3 from VOICEVOX prebuilt builder
 # -----------------------------------------------------------------------------
 FROM ubuntu:22.04 AS ort-builder
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG ONNXRUNTIME_VERSION=1.17.1
 
-# Install python3.10 (for cp310 GPU wheel) and pip
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3.10 \
-        python3.10-venv \
-        python3.10-dev \
-        ca-certificates \
+        wget unzip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Create venv with Python 3.10 and install onnxruntime-gpu wheel
-RUN mkdir -p /tmp/ort-venv && \
-    python3.10 -m venv /tmp/ort-venv && \
-    /tmp/ort-venv/bin/pip install --no-cache-dir "onnxruntime-gpu==${ONNXRUNTIME_VERSION}"
-
-# Copy all .so files from the wheel's onnxruntime/capi/ to /opt/onnxruntime/lib/
-RUN mkdir -p /opt/onnxruntime/lib && \
-    find /tmp/ort-venv/lib/python3.10/site-packages/onnxruntime/capi -name "*.so*" -exec cp -P {} /opt/onnxruntime/lib/ \; && \
+# VOICEVOX ships prebuilt CUDA ORT 1.17.3 — matches soname expected by voicevox_core 0.16.4.
+# SHA256: DC10400C2CA32DC8BA60EC8740C6E7770CE1DCEFEA3C37926A4AC22C049F2D24
+RUN mkdir -p /tmp/ort-download && \
+    wget -q -O /tmp/ort-download/ort-cuda.tgz \
+        https://github.com/VOICEVOX/onnxruntime-builder/releases/download/onnxruntime-1.17.3/onnxruntime-linux-x64-cuda-1.17.3.tgz && \
+    cd /tmp/ort-download && tar xzf ort-cuda.tgz && \
+    mkdir -p /opt/onnxruntime/lib && \
+    cp /tmp/ort-download/onnxruntime-linux-x64-cuda-1.17.3/lib/* /opt/onnxruntime/lib/ && \
     # Create symlinks for versioned soname resolution
     cd /opt/onnxruntime/lib && \
-    ln -sf libonnxruntime.so.1.17.1 libonnxruntime.so.1 && \
-    ln -sf libonnxruntime.so.1.17.1 libonnxruntime.so && \
+    ln -sf libonnxruntime.so.1.17.3 libvoicevox_onnxruntime.so.1.17.3 && \
+    ln -sf libonnxruntime.so.1.17.3 libvoicevox_onnxruntime.so && \
+    ln -sf libonnxruntime.so.1.17.3 libvoicevox_onnxruntime.so.1 && \
+    ln -sf libonnxruntime.so.1.17.3 libvoicevox_onnxruntime.so.1.17 && \
+    ln -sf libonnxruntime.so.1.17.3 libonnxruntime.so.1 && \
+    ln -sf libonnxruntime.so.1.17.3 libonnxruntime.so && \
     ls -la /opt/onnxruntime/lib/
 
 # -----------------------------------------------------------------------------
