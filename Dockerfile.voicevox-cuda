@@ -46,6 +46,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN wget -q https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-linux-x86_64.tar.gz -O /tmp/cmake.tar.gz && \
     tar -xzf /tmp/cmake.tar.gz -C /opt && \
     ln -sf /opt/cmake-3.31.6-linux-x86_64/bin/cmake /usr/local/bin/cmake && \
+    ln -sf /opt/cmake-3.31.6-linux-x86_64/bin/ctest /usr/local/bin/ctest && \
     rm /tmp/cmake.tar.gz && \
     cmake --version
 
