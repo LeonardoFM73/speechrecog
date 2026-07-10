@@ -13,7 +13,7 @@
 FROM ubuntu:22.04 AS ort-builder
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG ONNXRUNTIME_VERSION=1.21.0
+ARG ONNXRUNTIME_VERSION=1.24.1
 
 # Install Python 3.10 (needed to install cp310 GPU wheel)
 RUN apt-get update && apt-get install -y --no-install-recommends \
