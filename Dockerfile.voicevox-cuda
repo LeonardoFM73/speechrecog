@@ -49,16 +49,14 @@ RUN wget -q https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.3
     rm /tmp/cmake.tar.gz && \
     cmake --version
 
-# Install Eigen via git clone — headers go to /usr/local/include/eigen3
-# with a handcrafted Eigen3Config.cmake so ORT's find_package(Eigen3 CONFIG REQUIRED)
-# succeeds. Using git clone instead of wget to avoid GitLab 403 rate-limits.
-# We clone the master branch (shallow) and grab the latest stable.
-RUN git clone --depth 1 --branch master https://gitlab.com/libeigen/eigen.git /opt/eigen-src && \
+# Download Eigen from GitLab via git archive (avoids 403 rate-limiting on
+# direct tarball URLs). Extract to /opt/eigen-3.4.0 and also copy headers
+# to /usr/local/include/eigen3 for system-wide use.
+# The eigen_SOURCE_PATH cmake_extra_define will point ORT to this location.
+RUN git clone --depth 1 https://gitlab.com/libeigen/eigen.git /opt/eigen-3.4.0 && \
     mkdir -p /usr/local/include/eigen3 && \
-    cp -R /opt/eigen-src/Eigen /opt/eigen-src/unsupported /usr/local/include/eigen3/ && \
-    mkdir -p /usr/local/lib/cmake/Eigen3 && \
-    printf 'set(EIGEN3_VERSION 3.4.0)\nset(EIGEN3_INCLUDE_DIR "/usr/local/include/eigen3")\nif(NOT TARGET Eigen3::Eigen)\n    find_path(EIGEN3_INCLUDE_DIR NAMES Eigen/Core PATHS /usr/local/include/eigen3 NO_DEFAULT_PATH)\n    if(EIGEN3_INCLUDE_DIR)\n        add_library(Eigen3::Eigen INTERFACE IMPORTED)\n        set_property(TARGET Eigen3::Eigen PROPERTY INTERFACE_INCLUDE_DIRECTORIES "${EIGEN3_INCLUDE_DIR}")\n    endif()\nendif()\n' > /usr/local/lib/cmake/Eigen3/Eigen3Config.cmake && \
-    rm -rf /opt/eigen-src
+    cp -R /opt/eigen-3.4.0/Eigen /opt/eigen-3.4.0/unsupported /usr/local/include/eigen3/ && \
+    rm -rf /opt/eigen-3.4.0/.git
 
 # cuDNN runtime headers — required by ORT's CUDA EP build.
 # On nvidia/cuda:12.8.0-devel images, libcudnn ships with the base.
@@ -100,6 +98,7 @@ RUN python3 ./tools/ci_build/build.py \
         --skip_submodule_sync \
         --allow_running_as_root \
         --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=120" \
+        --cmake_extra_defines "eigen_SOURCE_PATH=/opt/eigen-3.4.0" \
         --cmake_extra_defines "onnxruntime_ENABLE_PYTHON=OFF" \
         --cmake_extra_defines "onnxruntime_BUILD_UNIT_TESTS=OFF" \
         --cmake_extra_defines "onnxruntime_BUILD_BENCHMARKS=OFF" \
