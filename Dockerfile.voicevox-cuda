@@ -167,8 +167,7 @@ RUN wget -q -O ${VOICEVOX_CORE_ASSET}.zip \
         https://github.com/VOICEVOX/voicevox_core/releases/download/${VOICEVOX_CORE_VERSION}/${VOICEVOX_CORE_ASSET}.zip && \
     unzip -q ${VOICEVOX_CORE_ASSET}.zip && \
     mkdir -p /opt/voicevox_core && \
-    mv ${VOICEVOX_CORE_ASSET}/libcore.so /opt/voicevox_core/ && \
-    mv ${VOICEVOX_CORE_ASSET}/*.so.* /opt/voicevox_core/ 2>/dev/null || true && \
+    mv ${VOICEVOX_CORE_ASSET}/lib/libvoicevox_core.so /opt/voicevox_core/libcore.so && \
     rm -rf ${VOICEVOX_CORE_ASSET} ${VOICEVOX_CORE_ASSET}.zip
 
 # -----------------------------------------------------------------------------
