@@ -23,8 +23,11 @@ ARG ORT_VERSION=v1.21.0
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Toolchain + Python deps for ONNX Runtime build.
-# ORT 1.21 requires CMake >= 3.28 (Ubuntu 22.04 apt only ships 3.22);
-# install via Kitware APT for an in-distro CMake 3.30+.
+# ONNX Runtime 1.21's FetchContent/Eigen expects CMake < 4. Ubuntu 22.04's
+# apt cmake (3.22) passes; CMake 4.x breaks FetchContent + FindPython.
+# We install cmake via pip (3.31) afterwards so pyopenjtalk can find it,
+# but for the ORT build stage we ensure apt cmake (3.22) is used by ordering
+# /usr/bin before /usr/local in PATH during build.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         git \
@@ -33,19 +36,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-dev \
         wget \
         ca-certificates \
-        gnupg apt-transport-https \
         libcurl4-openssl-dev \
         libssl-dev \
         zlib1g-dev \
-    && wget -qO- https://apt.kitware.com/keys/kitware-archive-latest.asc \
-        | gpg --dearmor -o /usr/share/keyrings/kitware-archive-keyring.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] \
-        https://apt.kitware.com/ubuntu jammy main" \
-        > /etc/apt/sources.list.d/kitware.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends cmake && \
-    rm -rf /var/lib/apt/lists/* && \
-    cmake --version | head -1
+    && rm -rf /var/lib/apt/lists/*
 
 # cuDNN runtime headers — required by ORT's CUDA EP build.
 # On nvidia/cuda:12.8.0-devel images, libcudnn ships with the base.
@@ -86,6 +80,7 @@ RUN python3 ./tools/ci_build/build.py \
         --skip_submodule_sync \
         --allow_running_as_root \
         --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=120" \
+        --cmake_extra_defines "DEP_URL_eigen=https://github.com/eigenteam/eigen-git-mirror/archive/1d8b82b0740839c0de7f1242a3585e3390ff5f33.tar.gz" \
         --cmake_extra_defines "onnxruntime_ENABLE_PYTHON=OFF" \
         --cmake_extra_defines "onnxruntime_BUILD_UNIT_TESTS=OFF" \
         --cmake_extra_defines "onnxruntime_BUILD_BENCHMARKS=OFF" \
@@ -150,47 +145,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* && \
     ln -sf /usr/bin/python3.11 /usr/bin/python3
 
-# Use uv to manage Python deps in an isolated venv (no root-pip warnings).
+# Install uv and set up the isolated venv.
 RUN apt-get update && apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/* && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     mv /root/.local/bin/uv /usr/local/bin/uv && \
-    uv venv /opt/venv --python python3.11 && \
-    . /opt/venv/bin/activate && \
-    uv pip install "cmake<4" "pip" "setuptools" "wheel"
-
-WORKDIR /opt/voicevox_engine
+    uv venv /opt/venv --python python3.11
 
 # Clone the engine source at the pinned tag.
 RUN git clone --branch ${VOICEVOX_ENGINE_VERSION} --depth 1 \
-        https://github.com/VOICEVOX/voicevox_engine.git .
+        https://github.com/VOICEVOX/voicevox_engine.git /opt/voicevox_engine
+WORKDIR /opt/voicevox_engine
 
-# pyopenjtalk's htsengine submodule declares cmake_minimum_required(3.1)
-# which CMake 4.x rejects. Patch it via a helper that monkey-patches
-# the submodule's CMakeLists.txt when pyopenjtalk is checked out.
-# We use `git+https://...` and run a small `prep.sh` after the clone.
-
-# Pre-install build deps so --no-build-isolation works.
-RUN . /opt/venv/bin/activate && \
-    pip install numpy cython cmake
-
-# Copy the prep script (patches the submodule) into the image.
+# Pre-install build deps and patch pyopenjtalk before pip installs.
+# cmake<4 avoids CMake 4.x policy rejection in htsengine submodule.
+# The prep script patches any cmake_minimum_required < 3.5 to 3.10.
 COPY prep_pyopenjtalk.sh /opt/prep_pyopenjtalk.sh
-RUN chmod +x /opt/prep_pyopenjtalk.sh
-
-# Clone, patch submodule, then install.
-RUN . /opt/venv/bin/activate && \
-    cd /opt && \
-    git clone --depth 1 --recursive \
+RUN chmod +x /opt/prep_pyopenjtalk.sh && \
+    . /opt/venv/bin/activate && \
+    # Clone pyopenjtalk at exact commit and patch its submodule.
+    cd /opt && git clone --depth 1 --recursive \
         https://github.com/VOICEVOX/pyopenjtalk.git && \
     cd pyopenjtalk && \
     git fetch --depth 1 origin b35fc89fe42948a28e33aed886ea145a51113f88 && \
     git checkout b35fc89fe42948a28e33aed886ea145a51113f88 && \
     /opt/prep_pyopenjtalk.sh && \
-    pip install --no-build-isolation .
+    # Install build deps needed by pyproject.toml build backend.
+    uv pip install "cmake<4" "setuptools<60" "cython<3" "numpy" "pip" "setuptools" "wheel" && \
+    # Install patched pyopenjtalk from local clone.
+    pip install --no-build-isolation /opt/pyopenjtalk
 
 # Now install the rest of the engine requirements (everything except pyopenjtalk).
-# Remove the pyopenjtalk line so the fresh local install isn't re-fetched.
 RUN . /opt/venv/bin/activate && \
     grep -v "^pyopenjtalk" requirements.txt > /tmp/req.txt && \
     pip install -r /tmp/req.txt
