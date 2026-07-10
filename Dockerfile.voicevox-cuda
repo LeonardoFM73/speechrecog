@@ -28,8 +28,10 @@ ARG DEBIAN_FRONTEND=noninteractive
 # We install cmake via pip (3.31) afterwards so pyopenjtalk can find it,
 # but for the ORT build stage we ensure apt cmake (3.22) is used by ordering
 # /usr/bin before /usr/local in PATH during build.
+# NOTE: eigen URL overridden to GitHub mirror to avoid GitLab 403 rate-limiting.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
+        cmake \
         git \
         python3 \
         python3-pip \
