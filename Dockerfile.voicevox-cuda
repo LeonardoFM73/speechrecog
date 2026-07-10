@@ -258,12 +258,9 @@ RUN useradd --create-home --shell /bin/bash user && \
 # Trigger pyopenjtalk dictionary download at build time so first boot is fast.
 RUN gosu user python3 -c "import pyopenjtalk; pyopenjtalk._lazy_init()"
 
-COPY <<'EOF' /entrypoint.sh
-#!/bin/bash
-set -eu
-cat /opt/voicevox_engine/README.md > /dev/stderr
-exec "$@"
-EOF
+# Write entrypoint script (COPY doesn't support heredoc)
+RUN printf '%s\n' '#!/bin/bash' 'set -eu' 'cat /opt/voicevox_engine/README.md > /dev/stderr' 'exec "$@"' > /entrypoint.sh
+
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 50021
