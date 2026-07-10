@@ -28,9 +28,15 @@ RUN mkdir -p /tmp/ort-venv && \
     python3.10 -m venv /tmp/ort-venv && \
     /tmp/ort-venv/bin/pip install --no-cache-dir "onnxruntime-gpu==${ONNXRUNTIME_VERSION}"
 
-# List all files in the installed package to find .so locations
-RUN echo "=== Full onnxruntime package tree ===" && \
-    find /tmp/ort-venv/lib/python3.10/site-packages/onnxruntime -type f 2>/dev/null | sort
+# Copy all .so files from the wheel's onnxruntime/capi/ to /opt/onnxruntime/lib/
+RUN mkdir -p /opt/onnxruntime/lib && \
+    find /tmp/ort-venv/lib/python3.10/site-packages/onnxruntime/capi -name "*.so*" -exec cp -P {} /opt/onnxruntime/lib/ \; && \
+    # Create symlinks for versioned soname resolution
+    cd /opt/onnxruntime/lib && \
+    ln -sf libonnxruntime.so.1.23.2 libonnxruntime.so.1 && \
+    ln -sf libonnxruntime.so.1.23.2 libonnxruntime.so && \
+    ln -sf libonnxruntime_providers_cuda.so libonnxruntime_providers_cuda.so && \
+    ls -la /opt/onnxruntime/lib/ && file /opt/onnxruntime/lib/*
 
 # -----------------------------------------------------------------------------
 # Stage 2: Download prebuilt voicevox_core — no Rust compile
