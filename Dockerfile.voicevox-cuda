@@ -77,27 +77,12 @@ WORKDIR /opt/onnxruntime
 # Older ONNX Runtime versions need pip 22-ish to handle setuptools.
 RUN python3 -m pip install --upgrade "pip==23.3.1" "setuptools>=68" wheel
 
-# Patch eigen.cmake to skip FetchContent download when eigen_SOURCE_PATH is set.
-# ORT 1.21's eigen.cmake always tries to download eigen via FetchContent even
-# when USE_PREINSTALLED_EIGEN=ON. The issue is that eigen_POPULATE_SOURCE_DIR
-# is set to eigen_SOURCE_PATH but the FetchContent populate step runs first
-# and fails due to GitLab archive hash mismatch.
-# Fix: override eigen.cmake's populate block to detect USE_PREINSTALLED_EIGEN.
-RUN sed -i 's/^FetchContent_MakeAvailable(eigen)$/# FetchContent_MakeAvailable(eigen) -- overridden/' /opt/onnxruntime/cmake/external/eigen.cmake && \
-    echo 'if(NOT onnxruntime_USE_PREINSTALLED_EIGEN OR NOT DEFINED eigen_SOURCE_PATH)' >> /opt/onnxruntime/cmake/external/eigen.cmake && \
-    echo '  FetchContent_GetProperties(eigen)' >> /opt/onnxruntime/cmake/external/eigen.cmake && \
-    echo '  if(NOT eigen_POPULATED)' >> /opt/onnxruntime/cmake/external/eigen.cmake && \
-    echo '    FetchContent_Populate(eigen)' >> /opt/onnxruntime/cmake/external/eigen.cmake && \
-    echo '    set(eigen_POPULATED 1)' >> /opt/onnxruntime/cmake/external/eigen.cmake && \
-    echo '  endif()' >> /opt/onnxruntime/cmake/external/eigen.cmake && \
-    echo 'else()' >> /opt/onnxruntime/cmake/external/eigen.cmake && \
-    echo '  set(eigen_POPULATE_SOURCE_DIR "${eigen_SOURCE_PATH}")' >> /opt/onnxruntime/cmake/external/eigen.cmake && \
-    echo 'endif()' >> /opt/onnxruntime/cmake/external/eigen.cmake
-
-# Patch eigen.cmake to skip FetchContent download when USE_PREINSTALLED_EIGEN=ON.
-# ORT's eigen.cmake always fetches from GitLab archive URL — fails due to hash
-# mismatch / rate limiting. Replace with preinstall-aware version that sets
-# FetchContent properties directly.
+# Patch eigen.cmake to skip GitLab download and create Eigen3::Eigen target.
+# ORT 1.21's eigen.cmake ignores USE_PREINSTALLED_EIGEN and always calls
+# FetchContent on eigen — which hits a GitLab hash mismatch (gitlab returns
+# a different archive SHA than recorded in deps.txt due to rate-limiting/
+# cache corruption, so downloaded eigen-1d8b82b07408... has SHA1 mismatch).
+# Fix: Replace eigen.cmake to detect USE_PREINSTALLED_EIGEN and skip download.
 RUN cat > /opt/onnxruntime/cmake/external/eigen.cmake <<'EIGENPATCH'
 set(EIGEN_BUILD_DOC OFF CACHE BOOL "" FORCE)
 set(EIGEN_BUILD_BLAS OFF CACHE BOOL "" FORCE)
@@ -106,7 +91,9 @@ set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "" FORCE)
 
 if(onnxruntime_USE_PREINSTALLED_EIGEN)
     message(STATUS "Using pre-installed Eigen from: ${eigen_SOURCE_PATH}")
-    # Create Eigen3::Eigen IMPORTED target — ORT's CMakeLists link against this.
+    # Create Eigen3::Eigen INTERFACE IMPORTED target.
+    # ORT's onnxruntime.cmake and onnxruntime_providers_cuda.cmake link
+    # against Eigen3::Eigen — it must exist.
     if(NOT TARGET Eigen3::Eigen)
         add_library(Eigen3::Eigen INTERFACE IMPORTED)
         set_target_properties(Eigen3::Eigen PROPERTIES
@@ -119,8 +106,6 @@ else()
         URL_HASH SHA1=${DEP_SHA1_eigen}
         EXCLUDE_FROM_ALL
     )
-endif()
-if(NOT onnxruntime_USE_PREINSTALLED_EIGEN)
     onnxruntime_fetchcontent_makeavailable(eigen)
 endif()
 EIGENPATCH
