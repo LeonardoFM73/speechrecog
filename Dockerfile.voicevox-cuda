@@ -35,7 +35,7 @@ RUN mkdir -p /opt/onnxruntime/lib && \
     cd /opt/onnxruntime/lib && \
     ln -sf libonnxruntime.so.1.23.2 libonnxruntime.so.1 && \
     ln -sf libonnxruntime.so.1.23.2 libonnxruntime.so && \
-    ls -la /opt/onnxruntime/lib/ && file /opt/onnxruntime/lib/*
+    ls -la /opt/onnxruntime/lib/
 
 # -----------------------------------------------------------------------------
 # Stage 2: Download prebuilt voicevox_core — no Rust compile
