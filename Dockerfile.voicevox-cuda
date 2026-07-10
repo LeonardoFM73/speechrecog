@@ -106,41 +106,17 @@ RUN printf '%s\n' \
 # Verify the patch landed correctly
 RUN wc -l /opt/onnxruntime/cmake/external/eigen.cmake && cat /opt/onnxruntime/cmake/external/eigen.cmake
 
-# Configure + build ORT with CUDA EP, sm_120 kernels, shared libs.
-# Key flags:
-#   --use_cuda                       → enable CUDA Execution Provider
-#   --build_shared_lib               → produce libonnxruntime.so
-#   --build_wheel                    → also produce wheel (sanity check)
-#   --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES=120 → sm_120 SASS
-#   --skip_submodule_sync            → don't re-fetch submodules
-#   --allow_running_as_root          → Docker build runs as root
-RUN python3 ./tools/ci_build/build.py \
-        --build_dir /opt/build/RelWithDebInfo \
-        --config RelWithDebInfo \
-        --clean \
-        --use_cuda \
-        --cuda_home /usr/local/cuda \
-        --cudnn_home /usr/lib/x86_64-linux-gnu \
-        --use_preinstalled_eigen \
-        --eigen_path /opt/eigen-3.4.0 \
-        --build_shared_lib \
-        --build_wheel \
-        --parallel \
-        --skip_submodule_sync \
-        --allow_running_as_root \
-        --cmake_extra_defines "CMAKE_CUDA_ARCHITECTURES=120" \
-        --cmake_extra_defines "onnxruntime_ENABLE_PYTHON=OFF" \
-        --cmake_extra_defines "onnxruntime_BUILD_UNIT_TESTS=OFF" \
-        --cmake_extra_defines "onnxruntime_BUILD_BENCHMARKS=OFF" \
-        --cmake_extra_defines "onnxruntime_USE_FLASH_ATTENTION=OFF" \
-        --update
-
-# After build, stage the produced shared libraries into a clean dir.
-# Try multiple possible output paths from build.py.
-RUN mkdir -p /opt/ort-libs && \
-    find /opt/build -name 'libonnxruntime.so*' -exec cp -P {} /opt/ort-libs/ \; 2>/dev/null && \
-    find /opt/build -name 'libonnxruntime_providers_*.so*' -exec cp -P {} /opt/ort-libs/ \; 2>/dev/null; \
-    echo "ORT libs:" && ls -la /opt/ort-libs/
+# Install ONNX Runtime CUDA wheel directly — prebuilt, no compile needed.
+# We need libonnxruntime.so exposed in a known path for voicevox_core linking.
+ARG ONNXRUNTIME_VERSION=1.21.0
+RUN uv pip install "onnxruntime-gpu==${ONNXRUNTIME_VERSION}" && \
+    python3 -c "\
+import onnxruntime, os, shutil;\
+pkg = os.path.dirname(onnxruntime.__file__);\
+dst = '/opt/onnxruntime/lib/';\
+[shutil.copy2(os.path.join(pkg, f), dst) for f in os.listdir(pkg) if f.endswith('.so') or f.startswith('libonnx')]\
+" 2>/dev/null || true
+RUN ls -la /opt/onnxruntime/lib/
 
 # -----------------------------------------------------------------------------
 # Stage 2: Download prebuilt voicevox_core — no Rust compile
