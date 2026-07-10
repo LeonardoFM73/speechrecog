@@ -252,7 +252,8 @@ RUN sed -i "s/__version__ = \"latest\"/__version__ = \"${VOICEVOX_ENGINE_VERSION
 
 # Create non-root user (matches upstream pattern).
 RUN useradd --create-home --shell /bin/bash user && \
-    chown -R user:user /opt/voicevox_engine
+    chown -R user:user /opt/voicevox_engine && \
+    chown -R user:user /opt/venv
 
 # Trigger pyopenjtalk dictionary download at build time so first boot is fast.
 RUN gosu user python3 -c "import pyopenjtalk; pyopenjtalk._lazy_init()"
