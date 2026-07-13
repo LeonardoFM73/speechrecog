@@ -17,7 +17,7 @@ class TranscriptionService:
     _instance: TranscriptionService | None = None
     _model: WhisperModel | None = None
 
-    def __init__(self, model_size: str = "medium", device: str = "cuda", compute_type: str = "float16"):
+    def __init__(self, model_size: str = "large-v3-turbo", device: str = "cuda", compute_type: str = "float16"):
         self._model_size = model_size
         self._device = device
         self._compute_type = compute_type
@@ -86,6 +86,13 @@ class TranscriptionService:
                 beam_size=5,
                 vad_filter=True,
                 vad_parameters=dict(min_silence_duration_ms=500),
+                condition_on_previous_text=False,
+                initial_prompt="これは日本語の会話です。",
+                temperature=0,
+                compression_ratio_threshold=2.4,
+                log_prob_threshold=-1.0,
+                no_speech_threshold=0.6,
+                word_timestamps=True,
             )
 
             text_parts: list[str] = []

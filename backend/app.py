@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
         device = "cpu"
         logger.info("torch not installed → using CPU")
 
-    model_size = os.environ.get("WHISPER_MODEL_SIZE", "large")
+    model_size = os.environ.get("WHISPER_MODEL_SIZE", "large-v3-turbo")
     initialise(model_size=model_size, device=device, compute_type="float16" if device == "cuda" else "int8")
     logger.info("FastAPI application started — device=%s", get_service().current_device)
 
