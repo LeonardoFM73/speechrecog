@@ -88,7 +88,7 @@ class TranscriptionService:
                 vad_parameters=dict(min_silence_duration_ms=500),
                 condition_on_previous_text=False,
                 initial_prompt="これは日本語の会話です。",
-                temperature=0,
+                temperature=[0.0],
                 compression_ratio_threshold=2.4,
                 log_prob_threshold=-1.0,
                 no_speech_threshold=0.6,

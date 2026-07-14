@@ -1,4 +1,4 @@
-/** API client for the transcription + chat + TTS backend. */
+/** API client for the transcription + chat + TTS + sessions backend. */
 
 import { ChatMessage, Speaker, TranscriptionResult, TtsRequest } from "@/types/audio";
 
@@ -55,6 +55,7 @@ export async function checkHealth(baseUrl: string): Promise<{
   modelLoaded: boolean;
   chatReady: boolean;
   ttsReady: boolean;
+  dbReady: boolean;
 }> {
   const response = await fetch(`${baseUrl}/health`);
   if (!response.ok) {
@@ -66,6 +67,7 @@ export async function checkHealth(baseUrl: string): Promise<{
     model_loaded: boolean;
     chat_ready?: boolean;
     tts_ready?: boolean;
+    db_ready?: boolean;
   };
   return {
     status: data.status,
@@ -73,6 +75,7 @@ export async function checkHealth(baseUrl: string): Promise<{
     modelLoaded: data.model_loaded,
     chatReady: data.chat_ready ?? false,
     ttsReady: data.tts_ready ?? false,
+    dbReady: data.db_ready ?? false,
   };
 }
 
@@ -177,4 +180,69 @@ export async function synthesiseSpeech(
 export const ttsClient = {
   listSpeakers: fetchSpeakers,
   synthesise: synthesiseSpeech,
+};
+
+// ---------------------------------------------------------------------------
+// Session persistence
+// ---------------------------------------------------------------------------
+export interface SessionTurn {
+  turn: number;
+  ts: number;
+  user_text: string;
+  language: string;
+  audio_duration_ms: number;
+  ai_reply_jp: string | null;
+  ai_reply_translation: string | null;
+  tts_speaker_id: number | null;
+  audio_blob_ref: string | null;
+  scenario_switched: boolean;
+  error: string | null;
+}
+
+export interface SessionDoc {
+  session_id: string;
+  started_at: string;
+  ended_at: string | null;
+  mode: "transcribe" | "roleplay";
+  scenario_id: string;
+  scenario_text: string | null;
+  speaker_id: number | null;
+  messages: SessionTurn[];
+  user_metadata?: Record<string, unknown>;
+}
+
+export const sessionClient = {
+  async create(session_id: string, apiBase: string): Promise<SessionDoc> {
+    const r = await fetch(`${apiBase}/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id }),
+    });
+    if (!r.ok) throw new Error(`Session create failed: ${r.status}`);
+    return r.json();
+  },
+  async update(session_id: string, patch: Partial<SessionDoc>, apiBase: string): Promise<SessionDoc> {
+    const r = await fetch(`${apiBase}/sessions/${session_id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!r.ok) throw new Error(`Session update failed: ${r.status}`);
+    return r.json();
+  },
+  async appendMessage(session_id: string, turn: SessionTurn, apiBase: string): Promise<{ turn: number }> {
+    const r = await fetch(`${apiBase}/sessions/${session_id}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(turn),
+    });
+    if (!r.ok) throw new Error(`Message append failed: ${r.status}`);
+    return r.json();
+  },
+  async get(session_id: string, apiBase: string): Promise<SessionDoc | null> {
+    const r = await fetch(`${apiBase}/sessions/${session_id}`);
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error(`Session fetch failed: ${r.status}`);
+    return r.json();
+  },
 };

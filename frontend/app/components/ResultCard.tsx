@@ -1,81 +1,37 @@
-/** Display transcription result with text, duration, and language. */
-
 "use client";
 
-interface ResultCardProps {
+import { FileText, Clock, Languages } from "lucide-react";
+
+interface Props {
   text: string;
   duration: number;
   language: string;
   isError: boolean;
 }
 
-export default function ResultCard({
-  text,
-  duration,
-  language,
-  isError,
-}: ResultCardProps) {
+export default function ResultCard({ text, duration, language, isError }: Props) {
   return (
-    <div
-      className={`rounded-xl border p-5 backdrop-blur-sm ${
-        isError
-          ? "border-red-500/30 bg-red-500/5"
-          : "border-[var(--border-subtle)] bg-[var(--bg-card)]"
-      }`}
-    >
-      {/* Result header */}
-      <div className="mb-3 flex items-center gap-3">
-        <div
-          className={`h-2 w-2 rounded-full ${
-            isError ? "bg-red-500" : "bg-green-500"
-          }`}
-        />
-        <span
-          className={`text-xs font-medium ${
-            isError ? "text-red-400" : "text-green-400"
-          }`}
-        >
-          {isError ? "Error" : "Transcription Complete"}
-        </span>
-
+    <div className={`rounded-2xl border bg-white p-4 shadow-card ${isError ? "border-red-200" : "border-slate-200"}`}>
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-700">
+        <FileText className="h-4 w-4" />
+        <span>{isError ? "Error" : "Transcription"}</span>
         {!isError && language && (
-          <span className="ml-auto text-xs text-[var(--text-secondary)]/50">
-            {language.toUpperCase()}
-          </span>
+          <span className="ml-auto text-xs font-normal text-slate-400">{language.toUpperCase()}</span>
         )}
       </div>
-
-      {/* Transcribed text */}
-      <div
-        className={`rounded-lg p-3 text-base leading-relaxed ${
-          isError
-            ? "text-red-300/80"
-            : "text-[var(--text-primary)]"
-        }`}
-      >
-        {isError
-          ? text
-          : text
-        }
-      </div>
-
-      {/* Duration */}
+      <div className={`whitespace-pre-wrap text-base ${isError ? "text-red-700" : "text-slate-900"}`}>{text}</div>
       {!isError && duration > 0 && (
-        <div className="mt-3 flex items-center gap-2 text-xs text-[var(--text-secondary)]/50">
-          <svg
-            className="h-3.5 w-3.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          Duration: {duration.toFixed(1)}s
+        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1">
+            <Clock className="h-3 w-3" />
+            {duration.toFixed(1)}s
+          </span>
+          {language && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1">
+              <Languages className="h-3 w-3" />
+              {language}
+            </span>
+          )}
         </div>
       )}
     </div>

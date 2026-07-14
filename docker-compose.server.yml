@@ -44,6 +44,9 @@ services:
       # TTS — VOICEVOX on same host (this compose stack).
       - VOICEVOX_URL=http://voicevox:50021
       - VOICEVOX_DEFAULT_SPEAKER=${VOICEVOX_DEFAULT_SPEAKER:-2}
+      # Sessions — MongoDB
+      - MONGODB_URL=${MONGODB_URL:-mongodb://mongo:27017}
+      - MONGODB_DB=${MONGODB_DB:-speechrecog}
 
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health >/dev/null || exit 1"]
@@ -53,7 +56,10 @@ services:
       start_period: 90s
 
     depends_on:
-      - voicevox
+      voicevox:
+        condition: service_started
+      mongo:
+        condition: service_healthy
 
     volumes:
       - whisper-model-cache:/app/.cache/huggingface
@@ -92,7 +98,31 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ──────────────── MongoDB (session persistence) ────────────────
+  mongo:
+    image: mongo:7
+    container_name: stt-mongo-server
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 # ──────────────── Volumes ────────────────
 volumes:
   whisper-model-cache:
+    driver: local
+  mongo-data:
     driver: local

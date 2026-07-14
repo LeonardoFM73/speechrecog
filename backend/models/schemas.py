@@ -23,11 +23,15 @@ class HealthResponse(BaseModel):
     model_loaded: bool = Field(description="Whether the model is loaded in memory")
     chat_ready: bool = Field(
         default=False,
-        description="Whether the LLM chat service is initialised (requires GEMINI_API_KEY)",
+        description="Whether the LLM chat service is initialised (requires OPENAI_API_KEY)",
     )
     tts_ready: bool = Field(
         default=False,
         description="Whether the VOICEVOX TTS service is reachable",
+    )
+    db_ready: bool = Field(
+        default=False,
+        description="Whether the MongoDB persistence layer is reachable",
     )
 
 
@@ -79,11 +83,7 @@ class ChatResponse(BaseModel):
 # TTS (VOICEVOX) schemas
 # ---------------------------------------------------------------------------
 class Speaker(BaseModel):
-    """One (character, style) pair returned by VOICEVOX /speakers.
-
-    Example: id=2, name="四国めたん", style="あまあま",
-    label="四国めたん — あまあま".
-    """
+    """One (character, style) pair returned by VOICEVOX /speakers."""
 
     id: int = Field(description="VOICEVOX style_id (used as ?speaker= in /audio_query)")
     name: str = Field(description="Character name (e.g. '四国めたん')")
@@ -112,3 +112,69 @@ class TtsRequest(BaseModel):
         default=None,
         description="VOICEVOX style_id; falls back to backend default if omitted",
     )
+
+
+# ---------------------------------------------------------------------------
+# Session persistence schemas
+# ---------------------------------------------------------------------------
+class SessionCreateRequest(BaseModel):
+    """POST /sessions request body."""
+
+    session_id: str = Field(
+        min_length=1,
+        max_length=64,
+        description="Client-generated session UUID; idempotent on insert",
+    )
+    mode: Literal["transcribe", "roleplay"] = Field(
+        default="roleplay", description="Application mode for this session"
+    )
+    scenario_id: str = Field(default="", description="Scenario identifier (preset or 'custom')")
+    scenario_text: str | None = Field(default=None, description="Resolved scenario prompt")
+    speaker_id: int | None = Field(default=None, description="VOICEVOX style_id at start")
+    user_metadata: dict | None = Field(default=None, description="Optional client metadata")
+
+
+class SessionTurn(BaseModel):
+    """One completed exchange in the session."""
+
+    turn: int = Field(ge=0, description="Monotonic turn index inside this session")
+    ts: float = Field(description="Unix epoch seconds when the turn finished")
+    user_text: str = Field(default="", description="Transcribed Japanese user utterance")
+    language: str = Field(default="ja", description="Detected/forced language code")
+    audio_duration_ms: int = Field(default=0, ge=0, description="Audio length in ms")
+    ai_reply_jp: str | None = Field(default=None, description="LLM reply in Japanese")
+    ai_reply_translation: str | None = Field(default=None, description="Indonesian translation")
+    tts_speaker_id: int | None = Field(default=None, description="VOICEVOX style_id used for TTS")
+    audio_blob_ref: str | None = Field(default=None, description="Opaque reference to stored audio")
+    scenario_switched: bool = Field(default=False, description="True if user changed scenario mid-session")
+    error: str | None = Field(default=None, description="Error from this turn, if any")
+
+
+class SessionDoc(BaseModel):
+    """A persisted roleplay/transcribe session."""
+
+    session_id: str
+    started_at: float = Field(description="Unix epoch seconds")
+    ended_at: float | None = Field(default=None, description="Unix epoch seconds; null until close")
+    mode: Literal["transcribe", "roleplay"] = "roleplay"
+    scenario_id: str = ""
+    scenario_text: str | None = None
+    speaker_id: int | None = None
+    messages: list[SessionTurn] = Field(default_factory=list)
+    user_metadata: dict | None = None
+
+
+class SessionPatchRequest(BaseModel):
+    """PATCH /sessions/{id} body."""
+
+    ended_at: float | None = None
+    scenario_id: str | None = None
+    scenario_text: str | None = None
+    speaker_id: int | None = None
+    user_metadata: dict | None = None
+
+
+class SessionMessageResponse(BaseModel):
+    """POST /sessions/{id}/messages response."""
+
+    turn: int = Field(description="The assigned monotonic turn index")

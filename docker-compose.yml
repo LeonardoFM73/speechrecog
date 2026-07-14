@@ -51,6 +51,9 @@ services:
       # TTS (VOICEVOX on LAN host) — required for /tts (audio replies).
       - VOICEVOX_URL=http://${VOICEVOX_HOST:-10.100.101.12}:${VOICEVOX_PORT:-50021}
       - VOICEVOX_DEFAULT_SPEAKER=${VOICEVOX_DEFAULT_SPEAKER:-2}
+      # Sessions — MongoDB connection (defaults to compose service `mongo`).
+      - MONGODB_URL=${MONGODB_URL:-mongodb://mongo:27017}
+      - MONGODB_DB=${MONGODB_DB:-speechrecog}
 
     # Health check — waits for model to load
     healthcheck:
@@ -60,7 +63,10 @@ services:
       retries: 5
       start_period: 90s
 
-    # No depends_on — VOICEVOX runs on LAN host, not inside compose.
+    # MongoDB must be reachable before backend starts.
+    depends_on:
+      mongo:
+        condition: service_healthy
 
     volumes:
       # Persist downloaded model weights between restarts (~2-4 GB)
@@ -106,7 +112,31 @@ services:
   # Note: VOICEVOX runs on LAN host (not in compose).
   # Adjust VOICEVOX_HOST/PORT in .env to match.
 
+  # ──────────────── MongoDB (session persistence) ────────────────
+  mongo:
+    image: mongo:7
+    container_name: stt-mongo
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 # ──────────────── Volumes ────────────────
 volumes:
   whisper-model-cache:
+    driver: local
+  mongo-data:
     driver: local

@@ -1,52 +1,61 @@
-/** Record/Stop button with visual mic icon. */
-
 "use client";
 
-interface MicButtonProps {
+import { motion } from "framer-motion";
+import { Mic, MicOff, Square } from "lucide-react";
+
+interface Props {
   isRecording: boolean;
   hasPermission: boolean;
   onStart: () => void;
   onStop: () => void;
+  level?: number;
 }
 
-export default function MicButton({
-  isRecording,
-  hasPermission,
-  onStart,
-  onStop,
-}: MicButtonProps) {
+export default function MicButton({ isRecording, hasPermission, onStart, onStop, level = 0 }: Props) {
+  const disabled = hasPermission === false;
   return (
-    <button
-      onClick={isRecording ? onStop : onStart}
-      disabled={isRecording ? false : false}
-      className={`group relative flex h-20 w-20 items-center justify-center rounded-full text-2xl shadow-2xl transition-all duration-300 cursor-pointer ${
-        isRecording
-          ? "bg-red-500/20 shadow-red-500/30 ring-2 ring-red-500/50"
-          : "bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)] shadow-[0_0_30px_rgba(59,130,246,0.15)] hover:shadow-[0_0_50px_rgba(59,130,246,0.3)]"
-      }`}
-      aria-label={isRecording ? "Stop recording" : "Start recording"}
-    >
-      {/* Pulse ring when recording */}
-      {isRecording && (
-        <span className="absolute inset-0 -m-2 animate-ping rounded-full border-2 border-red-500/30" />
-      )}
-
-      {/* Mic icon */}
-      <svg
-        className={`h-8 w-8 transition-colors ${
-          isRecording ? "text-red-400" : "text-[var(--text-secondary)] group-hover:text-[var(--accent-blue)]"
-        }`}
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        strokeWidth={2}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"
-        />
-      </svg>
-    </button>
+    <div className="flex flex-col items-center gap-4">
+      <div className="relative">
+        {[0, 0.5, 1].map((delay) =>
+          isRecording ? (
+            <motion.span
+              key={delay}
+              className="absolute inset-0 rounded-full border-2 border-red-500"
+              initial={{ opacity: 0, scale: 1 }}
+              animate={{ opacity: [0, 0.6, 0], scale: [1, 1.3, 1.5] }}
+              transition={{ duration: 1.5, repeat: Infinity, delay }}
+            />
+          ) : null,
+        )}
+        <motion.button
+          type="button"
+          onClick={isRecording ? onStop : onStart}
+          disabled={disabled}
+          whileTap={{ scale: 0.94 }}
+          whileHover={{ scale: disabled ? 1 : 1.04 }}
+          className={`relative flex h-20 w-20 items-center justify-center rounded-full text-white shadow-card focus:outline-none focus:ring-4 ${
+            disabled
+              ? "bg-slate-400 cursor-not-allowed"
+              : isRecording
+                ? "bg-red-600 focus:ring-red-200"
+                : "bg-blue-600 focus:ring-blue-200"
+          }`}
+          aria-label={isRecording ? "Stop recording" : "Start recording"}
+        >
+          {disabled ? <MicOff className="h-8 w-8" /> : isRecording ? <Square className="h-7 w-7" /> : <Mic className="h-8 w-8" />}
+        </motion.button>
+      </div>
+      <div className="mic-wave" aria-hidden>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <span
+            key={i}
+            className="mic-wave-bar"
+            style={{
+              transform: `scaleY(${0.4 + Math.min(1, level * 4) * (0.6 + Math.sin((Date.now() / 200) + i) * 0.4)})`,
+            }}
+          />
+        ))}
+      </div>
+    </div>
   );
 }

@@ -27,6 +27,7 @@ from models.schemas import (
 from services.transcriber import initialise, get_service
 from services import chat as chat_service
 from services import tts as tts_service
+from services import sessions as sessions_service
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -84,6 +85,17 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("TTS service disabled: %s (start VOICEVOX engine to enable)", exc)
 
+    # Sessions — MongoDB is optional. If unreachable, /sessions returns 503
+    # but transcription / chat / TTS still work.
+    try:
+        await sessions_service.ensure_indexes()
+        if await sessions_service.ping():
+            logger.info("Sessions ready (MongoDB at %s)", os.environ.get("MONGODB_URL", "mongodb://mongo:27017"))
+        else:
+            logger.warning("Sessions: MongoDB unreachable — /sessions will return 503")
+    except Exception as exc:
+        logger.warning("Sessions disabled: %s", exc)
+
     yield
 
     # TTS shutdown — close HTTP client
@@ -95,6 +107,13 @@ async def lifespan(app: FastAPI):
     # Chat shutdown — close HTTP client
     try:
         await chat_service.aclose()
+    except Exception:
+        pass
+
+    # MongoDB client close
+    try:
+        if sessions_service._Store.client is not None:
+            sessions_service._Store.client.close()
     except Exception:
         pass
 
@@ -128,14 +147,16 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 @app.get("/health", response_model=HealthResponse)
 async def health() -> Any:
-    """Health check — returns GPU, model, chat, and TTS status."""
+    """Health check — returns GPU, model, chat, TTS, and DB status."""
     svc = get_service()
+    db_ok = await sessions_service.ping()
     return {
         "status": "ok",
         "gpu": svc.current_device,
         "model_loaded": svc.is_loaded,
         "chat_ready": chat_service.is_ready(),
         "tts_ready": tts_service.is_ready(),
+        "db_ready": db_ok,
     }
 
 
@@ -262,6 +283,12 @@ async def chat(req: ChatRequest) -> Any:
         "history": new_history,
         "error": None,
     }
+
+
+# ---------------------------------------------------------------------------
+# Session persistence router
+# ---------------------------------------------------------------------------
+app.include_router(sessions_service.router)
 
 
 if __name__ == "__main__":

@@ -3,20 +3,23 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary: #0a0a0f;
-  --bg-card: #13131f;
-  --bg-card-hover: #1a1a2e;
-  --border-subtle: #2a2a3e;
-  --text-primary: #e4e4e7;
-  --text-secondary: #a1a1aa;
-  --accent-red: #ef4444;
-  --accent-green: #22c55e;
-  --accent-blue: #3b82f6;
-  --accent-purple: #8b5cf6;
+  --bg-primary: #ffffff;
+  --bg-card: #f8fafc;
+  --bg-card-hover: #eff6ff;
+  --border-subtle: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --accent-red: #dc2626;
+  --accent-green: #16a34a;
+  --accent-blue: #2563eb;
+  --accent-purple: #7c3aed;
 }
 
 body {
-  background-color: var(--bg-primary);
+  background:
+    radial-gradient(ellipse at top, rgba(219, 234, 254, 0.4), transparent 60%),
+    #ffffff;
+  background-attachment: fixed;
   color: var(--text-primary);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
@@ -30,7 +33,7 @@ body {
 .mic-wave-bar {
   width: 4px;
   height: 20px;
-  background: var(--accent-red);
+  background: var(--accent-blue);
   border-radius: 2px;
   animation: wave 1.2s ease-in-out infinite;
 }

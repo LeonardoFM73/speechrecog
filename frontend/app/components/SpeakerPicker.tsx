@@ -1,56 +1,62 @@
 "use client";
 
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronDown, Check, Volume2 } from "lucide-react";
 import { Speaker, DEFAULT_SPEAKERS } from "@/types/audio";
 
-interface SpeakerPickerProps {
-  /** Currently selected speaker. */
+interface Props {
   selected: Speaker;
-  /** Called when the user picks a different speaker. */
-  onChange: (speaker: Speaker) => void;
-  /** Speakers fetched from /speakers; defaults to DEFAULT_SPEAKERS when empty. */
+  onChange: (s: Speaker) => void;
   available: Speaker[];
-  /** Disable the dropdown (e.g. while the engine is loading). */
   disabled?: boolean;
 }
 
-export default function SpeakerPicker({
-  selected,
-  onChange,
-  available,
-  disabled,
-}: SpeakerPickerProps) {
-  // De-duplicate by id; fall back to DEFAULT_SPEAKERS if the engine hasn't
-  // returned speakers yet.
-  const raw = (available.length > 0 ? available : DEFAULT_SPEAKERS).filter(
-    (s) => s.id !== undefined,
-  );
-  const dedup = Array.from(new Map(raw.map((s) => [s.id, s])).values());
-
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = Number(e.target.value);
-    const speaker = dedup.find((s) => s.id === id);
-    if (speaker) {
-      onChange(speaker);
-    }
-  };
+export default function SpeakerPicker({ selected, onChange, available, disabled }: Props) {
+  const [open, setOpen] = useState(false);
+  const list = (available.length > 0 ? available : DEFAULT_SPEAKERS).filter((s) => s.id !== undefined);
 
   return (
-    <div className="mb-4 w-full max-w-md">
-      <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]/70">
-        🎭 Speaker / Suara Guru
-      </label>
-      <select
-        value={selected.id}
-        onChange={handleChange}
+    <div className="relative mb-4 w-full max-w-md">
+      <button
+        type="button"
         disabled={disabled}
-        className="w-full rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none transition-colors hover:border-[var(--accent-blue)]/50 focus:border-[var(--accent-blue)] disabled:cursor-not-allowed disabled:opacity-50"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-card disabled:opacity-50"
       >
-        {dedup.map((s) => (
-          <option key={s.id} value={s.id}>
-            {s.label}
-          </option>
-        ))}
-      </select>
+        <span className="inline-flex items-center gap-2">
+          <Volume2 className="h-4 w-4 text-blue-600" />
+          {selected.label}
+        </span>
+        <ChevronDown className="h-4 w-4 text-slate-500" />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.ul
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.12 }}
+            className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-card"
+          >
+            {list.map((s) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(s);
+                    setOpen(false);
+                  }}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50"
+                >
+                  <span>{s.label}</span>
+                  {s.id === selected.id && <Check className="h-4 w-4 text-blue-600" />}
+                </button>
+              </li>
+            ))}
+          </motion.ul>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-/** Custom hook: microphone recording with MediaRecorder API. */
+/** Custom hook: microphone recording with MediaRecorder API + mic level metering. */
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { TranscriptionStatus } from "@/types/audio";
@@ -10,6 +10,8 @@ interface UseMicrophoneReturn {
   stopRecording: () => Promise<Blob>;
   hasPermission: boolean;
   permissionError: string | null;
+  level: number;
+  audioContext: AudioContext | null;
 }
 
 let mediaRecorderInstance: MediaRecorder | null = null;
@@ -21,6 +23,11 @@ export function useMicrophone(): UseMicrophoneReturn {
   const [duration, setDuration] = useState<number>(0);
   const [hasPermission, setHasPermission] = useState<boolean>(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [level, setLevel] = useState<number>(0);
+
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const levelRafRef = useRef<number | null>(null);
 
   const resetTimer = useCallback(() => {
     if (timerInterval) {
@@ -31,6 +38,44 @@ export function useMicrophone(): UseMicrophoneReturn {
     timerInterval = setInterval(() => {
       setDuration((prev) => prev + 1);
     }, 1000);
+  }, []);
+
+  const startLevelMeter = useCallback((stream: MediaStream) => {
+    const ctx = audioContextRef.current ?? new AudioContext();
+    audioContextRef.current = ctx;
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+    analyserRef.current = analyser;
+
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const tick = () => {
+      if (!analyserRef.current) return;
+      analyserRef.current.getByteTimeDomainData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128;
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / data.length);
+      setLevel(Math.min(1, rms * 4));
+      levelRafRef.current = requestAnimationFrame(tick);
+    };
+    levelRafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  const stopLevelMeter = useCallback(() => {
+    if (levelRafRef.current !== null) {
+      cancelAnimationFrame(levelRafRef.current);
+      levelRafRef.current = null;
+    }
+    analyserRef.current = null;
+    setLevel(0);
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => undefined);
+      audioContextRef.current = null;
+    }
   }, []);
 
   const startRecording = useCallback(async () => {
@@ -64,6 +109,7 @@ export function useMicrophone(): UseMicrophoneReturn {
       setHasPermission(true);
       setPermissionError(null);
       resetTimer();
+      startLevelMeter(stream);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === "NotAllowedError") {
         const msg = "Microphone access denied. Please allow microphone permissions.";
@@ -79,7 +125,7 @@ export function useMicrophone(): UseMicrophoneReturn {
       setPermissionError(msg);
       throw new Error(msg);
     }
-  }, [resetTimer]);
+  }, [resetTimer, startLevelMeter]);
 
   const stopRecording = useCallback(async (): Promise<Blob> => {
     return new Promise<Blob>((resolve, reject) => {
@@ -96,11 +142,11 @@ export function useMicrophone(): UseMicrophoneReturn {
       mediaRecorderInstance.onstop = () => {
         const blob = new Blob(chunks, { type: mediaRecorderInstance?.mimeType ?? "audio/webm" });
 
-        // Stop all tracks
         mediaRecorderInstance!.stream.getTracks().forEach((track) => track.stop());
         mediaRecorderInstance = null;
         chunks = [];
         setIsRecording(false);
+        stopLevelMeter();
 
         resolve(blob);
       };
@@ -111,25 +157,25 @@ export function useMicrophone(): UseMicrophoneReturn {
           mediaRecorderInstance = null;
           chunks = [];
           setIsRecording(false);
+          stopLevelMeter();
         }
         reject(new Error("Recording error occurred"));
       };
 
       mediaRecorderInstance.stop();
     });
-  }, []);
+  }, [stopLevelMeter]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (timerInterval) {
-        clearInterval(timerInterval);
-      }
+      if (timerInterval) clearInterval(timerInterval);
       if (mediaRecorderInstance?.stream) {
         mediaRecorderInstance.stream.getTracks().forEach((track) => track.stop());
       }
+      stopLevelMeter();
     };
-  }, []);
+  }, [stopLevelMeter]);
 
   return {
     isRecording,
@@ -138,5 +184,7 @@ export function useMicrophone(): UseMicrophoneReturn {
     stopRecording,
     hasPermission,
     permissionError,
+    level,
+    audioContext: audioContextRef.current,
   };
 }

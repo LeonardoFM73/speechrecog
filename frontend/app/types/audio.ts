@@ -30,6 +30,7 @@ export interface HealthStatus {
   model_loaded: boolean;
   chat_ready?: boolean;
   tts_ready?: boolean;
+  db_ready?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -40,6 +41,9 @@ export type ChatRole = "user" | "model";
 export interface ChatMessage {
   role: ChatRole;
   text: string;
+  translation?: string;
+  audioUrl?: string;
+  ts?: number;
 }
 
 export interface ChatScenario {
@@ -109,7 +113,7 @@ export interface TtsRequest {
 export const DEFAULT_SPEAKERS: Speaker[] = [
   { id: 2,  name: "四国めたん",   style: "あまあま", label: "四国めたん — あまあま" },
   { id: 3,  name: "ずんだもん",   style: "ノーマル", label: "ずんだもん — ノーマル" },
-  { id: 8,  name: "春日部つむぎ", style: "ノーマル", label: "春日部つむぎ — ノーマル" },
+  { id: 8,  name: "春日��つむぎ", style: "ノーマル", label: "春日部つむぎ — ノーマル" },
   { id: 27, name: "九州そら",     style: "ノーマル", label: "九州そら — ノーマル" },
   { id: 12, name: "雨晴はう",     style: "ノーマル", label: "雨晴はう — ノーマル" },
 ];

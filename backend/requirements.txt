@@ -24,3 +24,7 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
 loguru==0.7.3
+
+# Session persistence (MongoDB)
+motor==3.6.0
+pymongo==4.9.2

@@ -11,7 +11,7 @@ import {
   Speaker,
   TranscriptionStatus,
 } from "@/types/audio";
-import { chatClient, transcriptionClient, ttsClient } from "@/services/api";
+import { chatClient, SessionTurn, transcriptionClient, ttsClient } from "@/services/api";
 import MicButton from "@/components/MicButton";
 import ResultCard from "@/components/ResultCard";
 import StatusIndicator from "@/components/StatusIndicator";
@@ -19,7 +19,9 @@ import DurationBar from "@/components/DurationBar";
 import ScenarioPicker from "@/components/ScenarioPicker";
 import SpeakerPicker from "@/components/SpeakerPicker";
 import ChatHistory from "@/components/ChatHistory";
+import SessionControls from "@/components/SessionControls";
 import { useMicrophone } from "@/hooks/useMicrophone";
+import { useSessionContext } from "@/components/SessionProvider";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -50,7 +52,11 @@ export default function Home() {
   // Server health (chat + TTS readiness)
   const [chatReady, setChatReady] = useState<boolean>(false);
 
+  // Session — auto-start if user has ever clicked Start, otherwise remain idle
+  const session = useSessionContext();
+
   const recordingStartTime = useRef<number>(0);
+  const lastScenarioIdRef = useRef<string>(scenario.id);
 
   const {
     isRecording,
@@ -132,6 +138,58 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Hydrate: when session is restored from DB, replay messages into history
+  // once. We only hydrate on first arrival of `hydrated` for a given sessionId.
+  useEffect(() => {
+    const doc = session.hydrated;
+    if (!doc) return;
+    if (doc.messages.length === 0) return;
+    setHistory(
+      doc.messages.map((m): ChatMessage => ({
+        role: m.user_text ? "user" : "model",
+        text: m.user_text || m.ai_reply_jp || "",
+        translation: m.ai_reply_translation ?? undefined,
+        audioUrl: undefined,
+        ts: m.ts,
+      })),
+    );
+    if (doc.mode === "roleplay" || doc.mode === "transcribe") {
+      setMode(doc.mode);
+    }
+    if (doc.scenario_id) {
+      const match = PRESET_SCENARIOS.find((s) => s.id === doc.scenario_id);
+      if (match) setScenario(match);
+      else if (doc.scenario_id === CUSTOM_SCENARIO_ID && doc.scenario_text) {
+        setCustomScenario(doc.scenario_text);
+        setScenario({ id: CUSTOM_SCENARIO_ID, label: "Custom", description: doc.scenario_text });
+      }
+    }
+    if (doc.speaker_id != null) {
+      const found = DEFAULT_SPEAKERS.find((s) => s.id === doc.speaker_id)
+        ?? speakers.find((s) => s.id === doc.speaker_id);
+      if (found) setSelectedSpeaker(found);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.hydrated?.session_id]);
+
+  // Persist meta: when mode / scenario / speaker changes, patch the doc.
+  // Skip until session is active.
+  useEffect(() => {
+    if (!session.sessionId) return;
+    const patch: Partial<{
+      mode: AppMode;
+      scenario_id: string;
+      scenario_text: string | null;
+      speaker_id: number | null;
+    }> = {
+      mode,
+      scenario_id: scenario.id,
+      scenario_text: scenario.id === CUSTOM_SCENARIO_ID ? scenario.description : null,
+      speaker_id: selectedSpeaker.id,
+    };
+    void session.updateMeta(patch);
+  }, [session.sessionId, mode, scenario.id, scenario.description, selectedSpeaker.id, session]);
+
   // Cleanup any blob URL we created for the previous reply, and on unmount.
   useEffect(() => {
     return () => {
@@ -204,6 +262,11 @@ export default function Home() {
     setResultDuration(uploadResult.duration ?? 0);
     setLanguage(uploadResult.language ?? "");
 
+    // Auto-start session on first successful turn (user didn't click Start)
+    if (!session.sessionId) {
+      await session.start();
+    }
+
     // 2) If in roleplay mode, send the transcribed text to the LLM
     if (mode === "roleplay") {
       if (!chatReady) {
@@ -267,11 +330,41 @@ export default function Home() {
       }
 
       setStatus("complete");
+      const scenarioSwitched = lastScenarioIdRef.current !== scenario.id;
+      lastScenarioIdRef.current = scenario.id;
+      const turn: SessionTurn = {
+        turn: chatRes.history.length,
+        ts: Math.floor(Date.now() / 1000),
+        user_text: uploadResult.text,
+        language: uploadResult.language ?? "",
+        audio_duration_ms: Math.round((uploadResult.duration ?? 0) * 1000),
+        ai_reply_jp: chatRes.reply_jp,
+        ai_reply_translation: chatRes.reply_translation || null,
+        tts_speaker_id: selectedSpeaker.id,
+        audio_blob_ref: null,
+        scenario_switched: scenarioSwitched,
+        error: null,
+      };
+      void session.appendTurn(turn);
       return;
     }
 
     // Transcribe-only path
     setStatus("complete");
+    const turn: SessionTurn = {
+      turn: 1,
+      ts: Math.floor(Date.now() / 1000),
+      user_text: uploadResult.text,
+      language: uploadResult.language ?? "",
+      audio_duration_ms: Math.round((uploadResult.duration ?? 0) * 1000),
+      ai_reply_jp: null,
+      ai_reply_translation: null,
+      tts_speaker_id: null,
+      audio_blob_ref: null,
+      scenario_switched: false,
+      error: null,
+    };
+    void session.appendTurn(turn);
   }, [stopRecording, mode, chatReady, ttsReady, scenario, customScenario, history, selectedSpeaker.id]);
 
   const handleClearHistory = useCallback(() => {
@@ -324,6 +417,7 @@ export default function Home() {
         <div className="mt-2 text-xs text-[var(--text-secondary)]/60">
           Powered by local GPU inference
         </div>
+        <SessionControls />
       </div>
 
       {/* Mode toggle */}
