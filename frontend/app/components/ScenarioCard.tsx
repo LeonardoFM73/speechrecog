@@ -2,19 +2,29 @@
 
 import { motion } from "framer-motion";
 import { Pencil } from "lucide-react";
-import Avatar from "./Avatar";
-import { ChatScenario, CUSTOM_SCENARIO_ID } from "@/types/audio";
+import Avatar, { AvatarState } from "./Avatar";
 
 interface Props {
-  scenario: ChatScenario;
+  scenario: { id: string; label: string; description: string };
   selected: boolean;
   onSelect: () => void;
   customValue?: string;
   onCustomChange?: (v: string) => void;
+  state?: AvatarState;
 }
 
-export default function ScenarioCard({ scenario, selected, onSelect, customValue, onCustomChange }: Props) {
-  const isCustom = scenario.id === CUSTOM_SCENARIO_ID;
+// Map scenario IDs to avatar keys
+const SCENARIO_AVATAR_MAP: Record<string, string> = {
+  taxi_station: "untenshu",
+  convenience_store: "kanriin",
+  restaurant: "ekin",
+  train_station: "tencho",
+  doctor: "isha",
+};
+
+export default function ScenarioCard({ scenario, selected, onSelect, customValue, onCustomChange, state = "idle" }: Props) {
+  const isCustom = scenario.id === "custom";
+  const avatarKey = SCENARIO_AVATAR_MAP[scenario.id] ?? "custom";
   return (
     <motion.button
       type="button"
@@ -31,7 +41,7 @@ export default function ScenarioCard({ scenario, selected, onSelect, customValue
           <Pencil className="h-8 w-8 text-slate-500" />
         </div>
       ) : (
-        <Avatar scenarioId={scenario.id} state="idle" size="sm" />
+        <Avatar scenarioId={avatarKey} state={state} size="sm" />
       )}
       <div className="text-sm font-semibold text-slate-900">{scenario.label}</div>
       <div className="text-xs text-slate-500 line-clamp-2">{scenario.description}</div>

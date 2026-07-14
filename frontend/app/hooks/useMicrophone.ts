@@ -1,19 +1,19 @@
 /** Custom hook: microphone recording with MediaRecorder API + mic level metering. */
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { TranscriptionStatus } from "@/types/audio";
 
 interface UseMicrophoneReturn {
   isRecording: boolean;
   duration: number;
   startRecording: () => Promise<void>;
   stopRecording: () => Promise<Blob>;
-  hasPermission: boolean;
+  hasPermission: boolean | null; // null = not yet attempted
   permissionError: string | null;
   level: number;
   audioContext: AudioContext | null;
 }
 
+// Module-level state for recording (survives re-renders, cleared on stop)
 let mediaRecorderInstance: MediaRecorder | null = null;
 let chunks: Blob[] = [];
 let timerInterval: ReturnType<typeof setInterval> | null = null;
@@ -21,7 +21,7 @@ let timerInterval: ReturnType<typeof setInterval> | null = null;
 export function useMicrophone(): UseMicrophoneReturn {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [duration, setDuration] = useState<number>(0);
-  const [hasPermission, setHasPermission] = useState<boolean>(false);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [level, setLevel] = useState<number>(0);
 
@@ -43,6 +43,7 @@ export function useMicrophone(): UseMicrophoneReturn {
   const startLevelMeter = useCallback((stream: MediaStream) => {
     const ctx = audioContextRef.current ?? new AudioContext();
     audioContextRef.current = ctx;
+    if (ctx.state === "suspended") ctx.resume();
     const source = ctx.createMediaStreamSource(stream);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
@@ -111,15 +112,14 @@ export function useMicrophone(): UseMicrophoneReturn {
       resetTimer();
       startLevelMeter(stream);
     } catch (err: unknown) {
+      setHasPermission(false);
       if (err instanceof DOMException && err.name === "NotAllowedError") {
-        const msg = "Microphone access denied. Please allow microphone permissions.";
-        setPermissionError(msg);
-        throw new Error(msg);
+        setPermissionError("Microphone access denied. Please allow microphone permissions in your browser settings.");
+        throw new Error("Microphone access denied.");
       }
       if (err instanceof DOMException && err.name === "NotFoundError") {
-        const msg = "No microphone found. Please connect a microphone.";
-        setPermissionError(msg);
-        throw new Error(msg);
+        setPermissionError("No microphone found. Please connect a microphone.");
+        throw new Error("No microphone found.");
       }
       const msg = err instanceof Error ? err.message : "Failed to access microphone";
       setPermissionError(msg);

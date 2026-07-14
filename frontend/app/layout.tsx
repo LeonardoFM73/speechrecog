@@ -16,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
-      <body className="min-h-screen bg-[#0a0a0f] text-[#e4e4e7] antialiased">
+      <body className="min-h-screen bg-gradient-to-b from-sky-300 via-sky-100 to-amber-50 text-[#1f2937] antialiased">
         <SessionRoot apiBase={API_BASE}>{children}</SessionRoot>
       </body>
     </html>

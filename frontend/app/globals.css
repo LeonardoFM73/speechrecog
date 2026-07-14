@@ -16,10 +16,8 @@
 }
 
 body {
-  background:
-    radial-gradient(ellipse at top, rgba(219, 234, 254, 0.4), transparent 60%),
-    #ffffff;
-  background-attachment: fixed;
+  /* Tom page owns its own background scene. Keep transparent so it shows through. */
+  background: transparent;
   color: var(--text-primary);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
