@@ -1,10 +1,10 @@
-# 日本語音声認識 — Japanese Speech-to-Text & Roleplay
+# Japanese Speech-to-Text — Transcription, Roleplay & TTS
 
-Modern web app for Japanese speech transcription and conversational practice using **Faster-Whisper Medium** (local GPU) + **Google Gemini LLM** (cloud).
+Modern web app for Japanese speech transcription, conversational practice, and text-to-speech using **Faster-Whisper Large-v3-Turbo** (local GPU) + **OpenAI-compatible LLM** (vLLM/qwen35-9b) + **VOICEVOX** (TTS) + **MongoDB** (session persistence).
 
 Two modes in one page:
 - **Transcribe** — Speak Japanese → instant transcription (Faster-Whisper)
-- **Roleplay (Guru Jepang)** — Speak Japanese → STT → Gemini roleplays a scenario (e.g. "you are a taxi driver at Tokyo station") → replies in Japanese + Indonesian translation
+- **Roleplay (Guru Jepang)** — Speak Japanese → STT → LLM roleplays a scenario → **TTS voice reply** via VOICEVOX → full conversation history saved to MongoDB
 
 ## Architecture
 
@@ -12,18 +12,29 @@ Two modes in one page:
 ┌────────────────────┐   POST /transcribe (audio)    ┌──────────────────┐
 │   Browser          │ ───────────────────────────►  │   FastAPI         │
 │  (Next.js 15)      │                               │   + Faster-Whisper│
-│  React/TS          │ ◄──── JSON transcription ──── │   (CUDA/float16)  │
+│  React/TS          │ ◄──── JSON transcription ──── │   (CUDA/int8)     │
 │  • MediaRecorder   │                               └──────────────────┘
 │  • Mode toggle     │
-│  • Scenario picker │   POST /chat (text+history)    ┌──────────────────┐
+│  • Scenario/speaker│   POST /chat (text+history)     │
 │  • Chat history    │ ───────────────────────────►  │   ChatService     │
-│                    │                               │   (Google Gemini) │
-│                    │ ◄──── JSON reply ────────────  │   gemini-2.5-flash│
-└────────────────────┘                               └──────────────────┘
-                                                                  │
-                                                                  ▼
-                                                       Google Gemini API
-                                                       (HTTPS, JSON mode)
+│                    │                               │   (OpenAI-comp.)  │
+│                    │ ◄──── JSON reply ────────────  │   qwen35-9b       │
+└────────────────────┘                               └────────┬─────────┘
+                                                             │
+                                                   POST /tts   │
+                                                   (audio wav) │
+                                                             ▼
+                                                    ┌──────────────────┐
+                                                    │   VOICEVOX       │
+                                                    │   Engine (LAN)   │
+                                                    └──────────────────┘
+
+                                                   Persistent sessions
+                                                         ▼
+                                                  ┌──────────────────┐
+                                                  │   MongoDB (7)    │
+                                                  │   /sessions CRUD │
+                                                  └──────────────────┘
 ```
 
 ## Tech Stack
@@ -31,10 +42,12 @@ Two modes in one page:
 | Layer    | Technology                                       |
 |----------|--------------------------------------------------|
 | Frontend | Next.js 15, React 19, TypeScript, TailwindCSS    |
-| Backend  | FastAPI, Python 3.11+                            |
-| STT      | Faster-Whisper (medium), CUDA float16            |
-| LLM      | Google Gemini 2.5 Flash (via `google-genai` SDK) |
-| GPU      | NVIDIA RTX 4050 6GB                              |
+| Backend  | FastAPI, Python 3.11+, loguru                    |
+| STT      | Faster-Whisper (large-v3-turbo), CUDA int8       |
+| LLM      | OpenAI-compatible endpoint (vLLM, qwen35-9b)     |
+| TTS      | VOICEVOX Engine (WebSocket + CUDA onnxruntime-gpu)|
+| Session  | MongoDB 7 (Motor async, conversation persistence)|
+| GPU      | NVIDIA RTX 4050 6GB (CUDA 12+)                   |
 
 ## Project Structure
 
@@ -46,11 +59,13 @@ speechrecog/
 │   ├── requirements.txt          # Python dependencies
 │   ├── models/
 │   │   ├── __init__.py
-│   │   └── schemas.py            # Pydantic response schemas (incl. ChatRequest/Response)
+│   │   └── schemas.py            # Pydantic schemas (all endpoints)
 │   └── services/
 │       ├── __init__.py
-│       ├── transcriber.py        # TranscriptionService (singleton, Faster-Whisper)
-│       └── chat.py               # ChatService (singleton, Google Gemini)
+│       ├── transcriber.py        # TranscriptionService (Faster-Whisper)
+│       ├── chat.py               # ChatService (OpenAI-compatible LLM)
+│       ├── tts.py                # TtsService (VOICEVOX Engine)
+│       └── sessions.py           # SessionService (MongoDB persistence)
 ├── frontend/
 │   ├── package.json
 │   ├── next.config.mjs
@@ -60,24 +75,50 @@ speechrecog/
 │   ├── .env.example
 │   ├── public/
 │   └── app/
-│       ├── layout.tsx                # Root layout with metadata
-│       ├── page.tsx                  # Main page: mode toggle + transcribe/roleplay flow
-│       ├── globals.css               # Tailwind + custom CSS
+│       ├── layout.tsx
+│       ├── page.tsx              # Entry — renders MiguPage
+│       ├── globals.css
 │       ├── components/
 │       │   ├── DurationBar.tsx       # Recording timer + waveform
 │       │   ├── MicButton.tsx         # Record/Stop button
 │       │   ├── ResultCard.tsx        # Transcription result display
 │       │   ├── StatusIndicator.tsx   # Status badge + pulse
+│       │   ├── ScenarioCard.tsx      # Scenario selection cards
 │       │   ├── ScenarioPicker.tsx    # Roleplay scenario selector
-│       │   └── ChatHistory.tsx       # Roleplay conversation bubbles
+│       │   ├── ChatHistory.tsx       # Conversation bubbles
+│       │   ├── MiguPage.tsx          # Main page wrapper
+│       │   ├── SpeakerPicker.tsx     # VOICEVOX speaker selector
+│       │   ├── AudioPlayer.tsx       # Playback for TTS audio
+│       │   ├── TalkingMigu.tsx       # Animated avatar component
+│       │   ├── RoomBackground.tsx    # Scene background
+│       │   ├── Avatar.tsx            # Avatar renderer
+│       │   ├── SessionRoot.tsx       # Layout with session provider
+│       │   ├── SessionControls.tsx   # Session management UI
+│       │   ├── SessionProvider.tsx   # React context for sessions
+│       │   └── avatars/              # Avatar sprite variants
 │       ├── hooks/
-│       │   └── useMicrophone.ts      # MediaRecorder hook
+│       │   ├── useMicrophone.ts      # MediaRecorder hook
+│       │   ├── useAudioPlayback.ts   # Audio playback + wave
+│       │   ├── useMiguReactions.ts   # Avatar reaction triggers
+│       │   └── useSession.ts         # Session state hook
 │       ├── services/
-│       │   └── api.ts                  # API client (transcription + chat)
+│       │   └── api.ts                  # API client (all endpoints)
 │       └── types/
-│           └── audio.ts                # TypeScript types + PRESET_SCENARIOS
-├── Summary.md                    # Program flow / architecture narrative
-└── README.md
+│           └── audio.ts                # TypeScript types + scenarios
+├── *.yml / *.md
+│   ├── docker-compose.yml          # Server deploy (backend+frontend+mongo)
+│   ├── docker-compose.local.yml    # Local laptop deploy (frontend only)
+│   ├── docker-compose.server.yml   # Server deploy variant
+│   ├── Dockerfile.backend          # GPU backend image
+│   ├── Dockerfile.frontend         # Static Next.js image
+│   ├── Dockerfile.voicevox-cuda    # VOICEVOX Engine with CUDA ORT
+│   ├── prep_pyopenjtalk.sh         # Build helper for pyopenjtalk
+│   ├── Summary.md                  # Architecture narrative
+│   └── README.md
+└── docs/
+    └── superpowers/
+        ├── plans/                  # Implementation plans
+        └── specs/                  # Design specs
 ```
 
 ---
@@ -86,12 +127,44 @@ speechrecog/
 
 ### Prerequisites
 
-- **Python 3.11+** (3.14 tested)
-- **Node.js 18+** (v24 tested)
+- **Python 3.11+**
+- **Node.js 20+**
 - **NVIDIA GPU** with CUDA 12+ (RTX 4050 recommended)
-- NVIDIA drivers installed
+- **VOICEVOX Engine** running on LAN (port 50021)
+- **MongoDB 7** (local or containerised)
+- OpenAI-compatible LLM server (e.g. vLLM)
 
-### 1. Backend Setup
+### Option A: Docker Compose (recommended)
+
+```bash
+cd speechrecog
+
+# Full stack — backend + frontend + MongoDB
+# GPU mode (Faster-Whisper on CUDA):
+docker compose --profile gpu up -d --build
+
+# Or CPU-only:
+docker compose up -d --build
+```
+
+After startup (~60s for model download + loading):
+
+```bash
+# Check services
+docker compose ps
+
+# View logs
+docker compose logs -f backend
+docker compose logs -f frontend
+```
+
+Open [http://localhost:3000](http://localhost:3000)
+
+Configure via `.env` — see [Configuration](#configuration) below.
+
+### Option B: Manual Setup
+
+#### 1. Backend
 
 ```bash
 cd backend
@@ -101,17 +174,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Expected output:
-```
-2026-06-14 20:30:00 [INFO] CUDA available: True → device=cuda
-2026-06-14 20:30:00 [INFO] Loading Faster-Whisper model=medium device=cuda compute=float16
-2026-06-14 20:30:45 [INFO] Model loaded successfully in 45.12 s
-2026-06-14 20:30:45 [INFO] FastAPI application started — device=cuda
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000
-```
-
-### 2. Frontend Setup
+#### 2. Frontend
 
 ```bash
 cd frontend
@@ -121,25 +184,37 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000)
 
-### 3. Test Microphone
+#### 3. VOICEVOX Engine
 
-1. Click the **mic button** on the web page
-2. **Allow** microphone permission when the browser asks
-3. Click again and **speak Japanese** (e.g. "こんにちは")
-4. Click the button again to **stop**
-5. Watch the transcription appear within 1-3 seconds
+Run VOICEVOX on your LAN or server. Configure `VOICEVOX_URL` in `.env`.
 
-### 4. Roleplay Mode
+#### 4. MongoDB
 
-1. Open the app and click the **Roleplay (Guru Jepang)** toggle
-2. **Pick a scenario** from the dropdown (or write a custom one)
-3. Click the mic, **speak Japanese**, stop, then wait:
-   - Transcription appears (same STT pipeline)
-   - Gemini roleplays back in Japanese + Indonesian translation
-4. Repeat to continue the conversation — the full chat history is preserved
-5. Press **Clear conversation** to start a new session
+Ensure MongoDB is reachable. Configure `MONGODB_URL` in `.env`.
 
-**Prerequisite:** set `GEMINI_API_KEY` (get one at https://aistudio.google.com/apikey) in your `.env` file.
+---
+
+## Configuration
+
+Copy `.env.example` to `.env` and adjust:
+
+```bash
+cp .env.example .env
+```
+
+| Variable                | Default                     | Description                                           |
+|-------------------------|-----------------------------|-------------------------------------------------------|
+| `BACKEND_PORT`          | `8000`                      | Host port for backend container                        |
+| `FRONTEND_PORT`         | `3000`                      | Host port for frontend                                 |
+| `NEXT_PUBLIC_API_URL`   | `http://localhost:8000`     | Backend URL reachable from the browser                 |
+| `OPENAI_BASE_URL`       | `http://10.100.101.12:5091/v1` | OpenAI-compatible LLM endpoint (required for /chat)|
+| `OPENAI_API_KEY`        | `EMPTY`                     | API key for the LLM endpoint                           |
+| `OPENAI_MODEL`          | `qwen35-9b`                 | Model name to use with the LLM endpoint                |
+| `VOICEVOX_URL`          | `http://localhost:50021`    | VOICEVOX Engine URL (required for /tts)                |
+| `VOICEVOX_DEFAULT_SPEAKER` | `2`                     | Default VOICEVOX speaker style_id (0=normal, 1=sweet, …) |
+| `VOICEVOX_PORT`         | `50021`                     | Host port for VOICEVOX container                       |
+| `MONGODB_URL`           | `mongodb://mongo:27017`     | MongoDB connection string                              |
+| `MONGODB_DB`            | `speechrecog`               | MongoDB database name                                  |
 
 ---
 
@@ -147,7 +222,7 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ### `GET /health`
 
-Check service health and GPU status.
+Check service health and component status.
 
 **Response:**
 ```json
@@ -155,11 +230,17 @@ Check service health and GPU status.
   "status": "ok",
   "gpu": "cuda",
   "model_loaded": true,
-  "chat_ready": true
+  "chat_ready": true,
+  "tts_ready": true,
+  "db_ready": true
 }
 ```
 
-`chat_ready` is `true` only when `GEMINI_API_KEY` is set and the Gemini client initialised successfully.
+| Field           | Description                                          |
+|-----------------|------------------------------------------------------|
+| `chat_ready`    | `true` if `OPENAI_BASE_URL` is set and LLM reachable |
+| `tts_ready`     | `true` if VOICEVOX engine is reachable               |
+| `db_ready`      | `true` if MongoDB connection succeeds                |
 
 ### `POST /transcribe`
 
@@ -167,10 +248,9 @@ Transcribe an audio file.
 
 **Content-Type:** `multipart/form-data`
 
-**Form Field:**
-| Field  | Type   | Required | Description    |
-|--------|--------|----------|----------------|
-| `audio` | File  | Yes      | Audio file (webm/wav/ogg, ≤20 MB) |
+| Field   | Type   | Required | Description                        |
+|---------|--------|----------|------------------------------------|
+| `audio` | File   | Yes      | Audio file (webm/wav/ogg, ≤20 MB)  |
 
 **Success Response (200):**
 ```json
@@ -178,7 +258,8 @@ Transcribe an audio file.
   "success": true,
   "text": "こんにちは。私の名前はレオナルドです。",
   "duration": 4.5,
-  "language": "ja"
+  "language": "ja",
+  "error": null
 }
 ```
 
@@ -186,17 +267,15 @@ Transcribe an audio file.
 | Status | Meaning                              |
 |--------|--------------------------------------|
 | 400    | Empty file or wrong content type     |
-| 401    | Microphone not granted               |
 | 413    | File too large (>20 MB)              |
-| 500    | Transcription error                  |
 | 503    | Model not loaded                     |
 | 504    | Transcription timeout (>30s)         |
 
 ### `POST /chat`
 
-Send a user turn (in Japanese) plus a scenario and history, get a Japanese reply with Indonesian translation. Used by the **Roleplay** mode after STT has produced the user's text.
+Send user text (in Japanese) plus scenario and history, get a Japanese reply with Indonesian translation.
 
-Requires `GEMINI_API_KEY` to be set on the backend (otherwise returns 503).
+Requires `OPENAI_BASE_URL` and `OPENAI_API_KEY` (otherwise returns 503).
 
 **Content-Type:** `application/json`
 
@@ -212,13 +291,11 @@ Requires `GEMINI_API_KEY` to be set on the backend (otherwise returns 503).
 }
 ```
 
-| Field      | Type             | Required | Constraints        | Description                                |
-|------------|------------------|----------|--------------------|--------------------------------------------|
-| `user_text`| string           | yes      | 1–2000 chars       | The Japanese text the user just said       |
-| `scenario` | string           | no       | ≤500 chars         | System-prompt context (roleplay setting)   |
-| `history`  | `ChatMessage[]`  | no       | ≤50 turns          | Prior turns; the current `user_text` is appended by the server |
-
-`ChatMessage` shape: `{"role": "user" | "model", "text": "..."}`
+| Field       | Type             | Required | Constraints        | Description                                |
+|-------------|------------------|----------|--------------------|--------------------------------------------|
+| `user_text` | string           | yes      | 1–2000 chars       | The Japanese text the user just said       |
+| `scenario`  | string           | no       | ≤500 chars         | System-prompt context (roleplay setting)   |
+| `history`   | `ChatMessage[]`  | no       | ≤50 turns          | Prior turns                                |
 
 **Success Response (200):**
 ```json
@@ -240,11 +317,94 @@ Requires `GEMINI_API_KEY` to be set on the backend (otherwise returns 503).
 | Status | Meaning                                                     |
 |--------|-------------------------------------------------------------|
 | 400    | Empty `user_text` or malformed scenario                     |
-| 422    | Validation failed (e.g. >50 history turns, too-long text)   |
+| 422    | Validation failed (e.g. >50 turns, too-long text)           |
 | 502    | LLM provider error (network / API failure)                  |
-| 503    | Chat service not initialised (`GEMINI_API_KEY` missing)     |
+| 503    | Chat service not initialised (`OPENAI_BASE_URL` missing)    |
 
-The server truncates `history` to the last **10 turns** before sending to Gemini, to bound token cost.
+The server truncates `history` to the last **10 turns** before sending to the LLM.
+
+### `GET /speakers`
+
+Return all available VOICEVOX speakers.
+
+**Success Response (200):**
+```json
+{
+  "speakers": [
+    {"id": 1, "name": "四国めたん", "style": "ノーマル", "label": "四国めたん — ノーマル"},
+    {"id": 2, "name": "四国めたん", "style": "あまあま", "label": "四国めたん — あまあま"},
+    {"id": 3, "name": "ずんだもん", "style": "ノーマル", "label": "ずんだもん — ノーマル"}
+  ]
+}
+```
+
+### `POST /tts`
+
+Synthesise Japanese text → WAV audio stream via VOICEVOX.
+
+**Content-Type:** `application/json`
+
+**Request Body:**
+```json
+{
+  "text": "かしこまりました。どこまで行かれますか?",
+  "speaker": 2
+}
+```
+
+| Field      | Type   | Required | Description                                    |
+|------------|--------|----------|------------------------------------------------|
+| `text`     | string | yes      | Japanese text to synthesise (1–2000 chars)     |
+| `speaker`  | int    | no       | VOICEVOX style_id; falls back to default       |
+
+**Success Response (200):** `audio/wav` — 24 kHz PCM WAV bytes.
+
+**Error Responses:**
+| Status | Meaning                                   |
+|--------|-------------------------------------------|
+| 400    | Empty text                                |
+| 502    | VOICEVOX engine error                     |
+| 503    | TTS service not ready                     |
+
+### Session Persistence (`/sessions`)
+
+All roleplay/transcribe sessions are persisted to MongoDB.
+
+| Method | Path                          | Description                         |
+|--------|-------------------------------|-------------------------------------|
+| `POST` | `/sessions`                   | Create or get existing session      |
+| `GET`  | `/sessions/{session_id}`      | Retrieve full session document      |
+| `PATCH`| `/sessions/{session_id}`      | Update session fields (scenario, etc.)|
+| `POST` | `/sessions/{session_id}/messages` | Append a new turn to the session |
+
+**Session Document:**
+```json
+{
+  "session_id": "abc-123",
+  "started_at": 1720000000.0,
+  "ended_at": null,
+  "mode": "roleplay",
+  "scenario_id": "taxi_station",
+  "scenario_text": "あなたは東京でタクシーの運転手です…",
+  "speaker_id": 2,
+  "messages": [
+    {
+      "turn": 0,
+      "ts": 1720000010.0,
+      "user_text": "すみません、タクシーは空いていますか",
+      "language": "ja",
+      "audio_duration_ms": 3200,
+      "ai_reply_jp": "はい、どうぞお乗りください",
+      "ai_reply_translation": "Ya, silakan masuk.",
+      "tts_speaker_id": 2,
+      "audio_blob_ref": null,
+      "scenario_switched": false,
+      "error": null
+    }
+  ],
+  "user_metadata": {}
+}
+```
 
 ---
 
@@ -252,161 +412,53 @@ The server truncates `history` to the last **10 turns** before sending to Gemini
 
 ### Frontend
 - **Recording timer** — live seconds counter with waveform animation
-- **Mode toggle** — switch between Transcribe-only and Roleplay (STT + LLM)
-- **Scenario picker** — 5 presets (taxi station, konbini, restaurant, train ticket, doctor) + custom input
+- **Mode toggle** — switch between Transcribe-only and Roleplay
+- **Scenario picker** — preset scenarios (taxi, konbini, restaurant, etc.) + custom input
+- **Speaker picker** — choose VOICEVOX character/style for TTS replies
 - **Chat history** — scrollable conversation bubbles with Indonesian translations
-- **Status indicator** — Idle, Recording, Uploading, Transcribing, Chatting, Complete, Error
+- **TTS audio playback** — listen to LLM replies in Japanese voice
+- **Animated avatar** — reactive character sprite (TalkingMigu) during conversations
+- **Session persistence** — conversations survive page refresh (MongoDB)
+- **Status indicator** — Idle, Recording, Uploading, Transcribing, Chatting, TTS Playing, Complete, Error
 - **Responsive design** — works on mobile and desktop
-- **Error handling** — permission denied, empty recording, network errors, LLM unavailable
+- **Error handling** — permission denied, empty recording, network errors, LLM/TTS unavailable
 
 ### Backend
 - **Model caching** — Faster-Whisper loads once, stays in memory
 - **CUDA detection** — auto-detects GPU; falls back to CPU automatically
-- **VAD filtering** — silences are filtered during transcription
+- **VAD filtering** — silences filtered during transcription
 - **Structured logging** — startup, transcription time, file size, errors
+- **Multiple services** — STT, LLM, TTS, session persistence — all independently degraded on failure
+- **Session persistence** — full conversation history stored in MongoDB
 
 ---
 
-## Deployment on Ubuntu (RTX 4050)
+## Docker Architecture
 
-### 1. System Setup
-
-```bash
-# Install NVIDIA drivers
-sudo ubuntu-drivers install
-sudo reboot
-
-# Verify GPU
-nvidia-smi
-
-# Install Python 3.11+
-sudo apt update
-sudo apt install -y python3.11 python3.11-venv python3-pip
-
-# Install Node.js 18+
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
+```
+┌──────────────────────┐
+│  Browser             │
+│  localhost:3000      │
+└──────────┬───────────┘
+           │
+   ┌───────▼────────┐
+   │  Frontend      │
+   │  Next.js (ALPIN)│
+   └───────┬────────┘
+           │ /api/* → http://backend:8000/*
+   ┌───────▼────────┐
+   │  Backend       │◄── NVIDIA GPU (CUDA)
+   │  FastAPI       │◄── VOICEVOX (LAN)
+   │  :8000         │◄── MongoDB (:27017)
+   └───────┬────────┘
+           │
+   ┌───────▼────────┐
+   │  MongoDB 7     │
+   │  :27017        │
+   └────────────────┘
 ```
 
-### 2. Clone & Setup
-
-```bash
-cd /opt/speechrecog
-git clone <your-repo-url> .
-
-# Backend
-cd backend
-python3.11 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Frontend
-cd ../frontend
-npm install
-```
-
-### 3. Verify GPU with Faster-Whisper
-
-```bash
-cd backend
-source venv/bin/activate
-python3 -c "
-import torch
-print(f'PyTorch version: {torch.__version__}')
-print(f'CUDA available: {torch.cuda.is_available()}')
-print(f'CUDA device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"None\"}')
-print(f'CUDA device memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB')
-"
-```
-
-Expected:
-```
-PyTorch version: 2.5.1+cu124
-CUDA available: True
-CUDA device: NVIDIA GeForce RTX 4050 Laptop GPU
-CUDA device memory: 6.0 GB
-```
-
-### 4. Ensure float16 is Enabled
-
-In `backend/services/transcriber.py` the model loads with:
-```python
-device="cuda", compute_type="float16"
-```
-
-`float16` requires:
-- GPU with **Compute Capability ≥ 7.5** (RTX 4050 = Ada Lovelace = 8.9 ✓)
-- CUDA toolkit 12+ (your system has 13.0 ✓)
-
-### 5. Systemd Service (Backend)
-
-```bash
-sudo tee /etc/systemd/system/stt-backend.service > /dev/null << 'EOF'
-[Unit]
-Description=Japanese STT Backend (Faster-Whisper)
-After=network.target
-
-[Service]
-Type=simple
-User=leonardofm
-WorkingDirectory=/opt/speechrecog/backend
-ExecStart=/opt/speechrecog/backend/venv/bin/python app.py
-Restart=always
-RestartSec=5
-Environment=PATH=/opt/speechrecog/backend/venv/bin:/usr/bin:/usr/local/bin
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable stt-backend
-sudo systemctl start stt-backend
-sudo systemctl status stt-backend
-```
-
-### 6. PM2 Service (Frontend)
-
-```bash
-sudo npm install -g pm2
-
-cd /opt/speechrecog/frontend
-pm2 start npm --name "stt-frontend" -- start
-pm2 save
-pm2 startup
-```
-
-### 7. Nginx Reverse Proxy
-
-```bash
-sudo apt install -y nginx
-
-sudo tee /etc/nginx/sites-available/speechrecog > /dev/null << 'EOF'
-server {
-    listen 80;
-    server_name your-domain.com;  # change this
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    location /api/ {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-EOF
-
-sudo ln -s /etc/nginx/sites-available/speechrecog /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-```
+NOTE: VOICEVOX runs as a separate service (not in this compose file) on a LAN host. The backend proxies TTS requests to it.
 
 ---
 
@@ -418,6 +470,7 @@ sudo systemctl restart nginx
 | 5s audio → result   | <3s       | ~1.5-2.5s          |
 | 15s audio → result  | <5s       | ~3-4s              |
 | Memory usage (GPU)  | <4GB      | ~3-4 GB             |
+| TTS synth time      | <2s       | ~0.5-1.5s          |
 
 ---
 
@@ -426,169 +479,59 @@ sudo systemctl restart nginx
 ### "GPU not available"
 
 ```bash
-# Check NVIDIA driver
 nvidia-smi
-
-# Check CUDA in Python
 python3 -c "import torch; print(torch.cuda.is_available())"
-
-# Reinstall with GPU support
-pip uninstall -y torch onnxruntime-gpu
-pip install torch --index-url https://download.pytorch.org/whl/cu124
-pip install onnxruntime-gpu
 ```
 
 ### "Model failed to load"
 
-The app will auto-fallback to CPU. Check logs:
+The app auto-fallbacks to CPU. Check logs:
 ```bash
 sudo journalctl -u stt-backend -f
 ```
 
+### "TTS service disabled"
+
+- Ensure VOICEVOX Engine is running and reachable at `VOICEVOX_URL`
+- Default expects VOICEVOX on `localhost:50021` inside the backend container
+- Adjust in `.env` → `VOICEVOX_URL=http://<lan-host-ip>:50021`
+
+### "Chat service disabled"
+
+- Ensure `OPENAI_BASE_URL` and `OPENAI_API_KEY` are set
+- Verify connectivity: `curl $OPENAI_BASE_URL/v1/models`
+- Models that support `response_format: {type: json_object}` work best
+
+### "MongoDB unreachable"
+
+- Ensure MongoDB is running and reachable at `MONGODB_URL`
+- Session persistence returns 503 if DB is down, but transcription/LLM/TTS still work
+
 ### "Microphone permission denied"
 
-- Make sure HTTPS is used (Chrome requires secure context for `getUserMedia`)
-- On localhost (http://localhost:3000) it works for development
-- On production, use HTTPS
+- HTTPS required in production (localhost HTTP works for dev)
+- Check browser settings → site permissions → microphone
 
-### "Transcription timeout"
+---
 
-- Larger audio files (>20s) may take longer
-- Adjust timeout in `backend/app.py`: `MAX_AUDIO_SIZE_MB`
-- Check GPU memory: `nvidia-smi`
+## Deployment Notes
 
-### "Chat service not ready" / `/chat` returns 503
+### Server (Ubuntu + GPU)
 
-- Make sure `GEMINI_API_KEY` is set in your `.env` file
-- Get a free key at https://aistudio.google.com/apikey
-- Restart the backend after setting the key
-- Verify with `curl http://localhost:8000/health` — `chat_ready` should be `true`
+1. `docker compose --profile gpu up -d --build` — deploys backend + frontend + MongoDB
+2. VOICEVOX runs separately on LAN; set `VOICEVOX_URL` in `.env` to reach it
+3. OpenAI-compatible LLM runs on separate host; set `OPENAI_BASE_URL` in `.env`
+
+### Local Laptop
+
+Use `docker-compose.local.yml` — starts only the frontend, browser reaches backend over LAN:
+
+```bash
+docker compose -f docker-compose.local.yml up -d
+```
 
 ---
 
 ## License
 
 MIT
-
----
-
-## Docker / Podman Deployment
-
-A `docker-compose.yml` is provided for one-command deployment with **Docker** or **Podman**.
-
-### Prerequisites
-
-- Docker Engine 24+ **or** Podman 5+
-- NVIDIA Container Toolkit (Docker) or `nvidia-container-toolkit` (Podman)
-- GPU: NVIDIA RTX 4050+ recommended
-
-### Quick Deploy
-
-```bash
-# Clone & enter the repo
-cd speechrecog
-
-# ── With Docker ──
-# GPU mode (Faster-Whisper on RTX 4050)
-docker compose --profile gpu up -d --build
-
-# CPU-only mode (no GPU)
-docker compose up -d --build
-
-# ── With Podman ──
-# Podman Compose is built-in (podman compose)
-# GPU mode — Podman uses nvidia-container-toolkit under the hood
-podman compose --profile gpu up -d --build
-
-# CPU-only mode
-podman compose up -d --build
-```
-
-After startup (~60s for model download + loading):
-
-```bash
-# Check services
-docker compose ps
-# or
-podman compose ps
-
-# View logs
-docker compose logs -f backend
-docker compose logs -f frontend
-```
-
-Open [http://localhost:3000](http://localhost:3000)
-
-### Docker Architecture
-
-```
-┌──────────────────────┐
-│  Browser             │
-│  localhost:3000      │
-└──────────┬───────────┘
-           │
-   ┌───────▼────────┐
-   │  nginx (built  │
-   │   into frontend│
-   └───────┬────────┘
-           │ /api/* → http://backend:8000/*
-   ┌───────▼────────┐
-   │  Backend       │
-   │  FastAPI       │◄── NVIDIA GPU (CUDA)
-   │  :8000         │
-   └────────────────┘
-```
-
-### Configuration
-
-Copy `.env.example` to `.env` and adjust if needed:
-
-```bash
-cp .env.example .env
-```
-
-| Variable                | Default                | Description                                                |
-|-------------------------|------------------------|------------------------------------------------------------|
-| `FRONTEND_PORT`         | `3000`                 | Host port for frontend                                     |
-| `NEXT_PUBLIC_API_URL`   | `http://backend:8000`  | Backend URL (internal Docker DNS)                          |
-| `GEMINI_API_KEY`        | *(empty)*              | Google Gemini API key. **Required for `/chat`** (roleplay). Leave empty to disable the chat feature. |
-
-### GPU Notes
-
-**Docker:** Requires [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
-
-```bash
-# Verify GPU passthrough
-docker run --rm --gpus all nvidia/cuda:12.6.0-base-ubuntu22.04 nvidia-smi
-```
-
-**Podman:** Requires `nvidia-container-toolkit` and `container-gpu` capability
-
-```bash
-# Verify GPU passthrough
-podman run --rm --device nvidia.com/gpu=all nvidia/cuda:12.6.0-base-ubuntu22.04 nvidia-smi
-```
-
-### Model Persistence
-
-The Faster-Whisper medium model (~2 GB) is downloaded on first run and cached in the `whisper-model-cache` volume. Without this volume, the model re-downloads on every rebuild.
-
-```bash
-# Inspect cache
-podman volume inspect speechrecog_whisper-model-cache
-# or
-docker volume inspect speechrecog_whisper-model-cache
-```
-
-### Stop & Clean Up
-
-```bash
-# Stop all services
-docker compose down
-# or
-podman compose down
-
-# Stop + remove volumes (model cache will be deleted!)
-docker compose down -v
-podman compose down -v
-```
