@@ -69,6 +69,7 @@ export default function MiguPage() {
     hasPermission,
     permissionError,
     level,
+    mediaDevicesSupported,
   } = useMicrophone();
 
   // Pipe mic level into the Migu mouth and emotion
@@ -673,6 +674,17 @@ export default function MiguPage() {
           </div>
         </div>
       </div>
+
+      {/* Mic permission error notification */}
+      {(permissionError || !mediaDevicesSupported) && (
+        <div className="mx-auto mt-4 w-full max-w-sm animate-pulse rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-center">
+          <p className="text-sm font-semibold text-red-700">⚠️ Mikrofon tidak bisa digunakan</p>
+          <p className="mt-1 text-xs text-red-600">
+            {permissionError ??
+              "Browser Anda tidak mendukung akses mikrofon. Pastikan kamu membuka halaman ini melalui HTTPS atau localhost."}
+          </p>
+        </div>
+      )}
 
       {/* History drawer */}
       <AnimatePresence>

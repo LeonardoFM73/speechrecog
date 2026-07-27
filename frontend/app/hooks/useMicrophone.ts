@@ -11,6 +11,7 @@ interface UseMicrophoneReturn {
   permissionError: string | null;
   level: number;
   audioContext: AudioContext | null;
+  mediaDevicesSupported: boolean;
 }
 
 // Module-level state for recording (survives re-renders, cleared on stop)
@@ -24,10 +25,20 @@ export function useMicrophone(): UseMicrophoneReturn {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [level, setLevel] = useState<number>(0);
+  const [mediaDevicesSupported, setMediaDevicesSupported] = useState<boolean>(true);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const levelRafRef = useRef<number | null>(null);
+
+  // Check if mediaDevices is available
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && !navigator.mediaDevices) {
+      setMediaDevicesSupported(false);
+    } else {
+      setMediaDevicesSupported(true);
+    }
+  }, []);
 
   const resetTimer = useCallback(() => {
     if (timerInterval) {
@@ -81,6 +92,10 @@ export function useMicrophone(): UseMicrophoneReturn {
 
   const startRecording = useCallback(async () => {
     try {
+      if (!navigator.mediaDevices) {
+        throw new Error("Your browser does not support microphone access (mediaDevices unavailable).");
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       if (!("MediaRecorder" in window)) {
@@ -186,5 +201,6 @@ export function useMicrophone(): UseMicrophoneReturn {
     permissionError,
     level,
     audioContext: audioContextRef.current,
+    mediaDevicesSupported,
   };
 }
