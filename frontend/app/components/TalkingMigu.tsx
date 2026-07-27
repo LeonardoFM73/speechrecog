@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 export type MiguEmotion =
   | "idle"
@@ -27,25 +27,6 @@ export interface TalkingMiguProps {
   onTapFoot?: () => void;
 }
 
-const PALETTE = {
-  hoodie:      "#4da8da",
-  hoodieDark:  "#3a8bc2",
-  hoodieTrim:  "#2b6fb3",
-  body:        "#fff9ec",
-  bodyDark:    "#f0dfc0",
-  beak:        "#ffb347",
-  beakDark:    "#e68a00",
-  cheek:       "#ffb3b3",
-  eye:         "#0f172a",
-  eyeWhite:    "#ffffff",
-  pupil:       "#0c1e3d",
-  mouth:       "#7c2d12",
-  crestFront:  "#fdd835",
-  crestBack:   "#ffd966",
-  foot:        "#f59e0b",
-  footDark:    "#d97706",
-};
-
 export default function TalkingMigu({
   emotion,
   size = 320,
@@ -57,9 +38,6 @@ export default function TalkingMigu({
   onTapWing,
   onTapFoot,
 }: TalkingMiguProps) {
-  const mouthRef = useRef<SVGGElement | null>(null);
-  const [blink, setBlink] = useState(false);
-  const [pupilOffset, setPupilOffset] = useState({ x: 0, y: 0 });
   const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([]);
 
   const addRipple = useCallback((x: number, y: number) => {
@@ -68,42 +46,6 @@ export default function TalkingMigu({
     window.setTimeout(() => {
       setRipples((prev) => prev.filter((r) => r.id !== id));
     }, 800);
-  }, []);
-
-  // Mouth animation while talking
-  useEffect(() => {
-    if (emotion !== "talking") return;
-    let raf = 0;
-    const tick = () => {
-      const lvl = audioLevelRef?.current ?? 0;
-      const scale = 0.3 + Math.min(1, lvl * 4) * 0.9;
-      if (mouthRef.current) {
-        mouthRef.current.style.transform = `scaleY(${scale.toFixed(2)})`;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [emotion, audioLevelRef]);
-
-  // Blink occasionally
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setBlink(true);
-      window.setTimeout(() => setBlink(false), 140);
-    }, 2800 + Math.random() * 1800);
-    return () => window.clearInterval(id);
-  }, []);
-
-  // Eyes follow a soft wandering target
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setPupilOffset({
-        x: (Math.random() - 0.5) * 3,
-        y: (Math.random() - 0.5) * 2,
-      });
-    }, 1200);
-    return () => window.clearInterval(id);
   }, []);
 
   // Emotion-based transforms
@@ -133,6 +75,43 @@ export default function TalkingMigu({
     : emotion === "surprised" ? 0.3
     : emotion === "love" ? 1.2
     : 2;
+
+  // Image-based tap handler — map coordinates to parts based on photo position
+  const handleTap = useCallback(
+    (clientX: number, clientY: number) => {
+      // We calculate relative to the component bounding box.
+      // But we don't have refs here, so use offsetX/Y from nativeEvent instead
+      // The zones pass offsetX/Y, so we just pass through.
+    },
+    [],
+  );
+
+  // Zone-based tap: each zone div passes offsetX/Y
+  const handleZoneTap = useCallback(
+    (zone: string, offsetX: number, offsetY: number) => {
+      addRipple(offsetX, offsetY);
+      // Determine which handler to call based on which zone div triggered it.
+      // Since each zone is a separate <div> with its own onClick, we use data-zone.
+      switch (zone) {
+        case "head":
+          onTapHead?.();
+          break;
+        case "belly":
+          onTapBelly?.();
+          break;
+        case "beak":
+          onTapBeak?.();
+          break;
+        case "wing":
+          onTapWing?.();
+          break;
+        case "feet":
+          onTapFoot?.();
+          break;
+      }
+    },
+    [addRipple, onTapHead, onTapBelly, onTapBeak, onTapWing, onTapFoot],
+  );
 
   return (
     <div
@@ -181,288 +160,153 @@ export default function TalkingMigu({
           ease: "easeInOut",
         }}
       >
-        <svg
-          viewBox="0 0 320 320"
-          width={size}
-          height={size}
-          className="overflow-visible"
-        >
-          {/* Shadow under Minori */}
-          <ellipse cx="160" cy="300" rx="80" ry="12" fill="#000" opacity="0.15" />
+        {/* Maskot image with clickable zones */}
+        <div className="relative" style={{ width: size, height: size }}>
+          <img
+            src="/maskot.png"
+            alt="Migu"
+            style={{ width: size, height: size, objectFit: "contain" }}
+            className="select-none touch-none"
+            draggable={false}
+          />
 
-          {/* Crest — feathers on head (clickable) */}
-          <g
-            onClick={(e) => {
-              addRipple(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-              onTapHead?.();
-            }}
-            style={{ cursor: "pointer" }}
-          >
-            <path
-              d="M 115 90 Q 110 55 140 45 Q 150 40 160 45 Q 170 40 180 45 Q 210 55 205 90"
-              fill={PALETTE.crestBack}
-              stroke={PALETTE.hoodieDark}
-              strokeWidth="1.5"
-            />
-            <path
-              d="M 125 85 Q 122 60 142 52 Q 150 47 160 52 Q 170 47 178 52 Q 198 60 195 85"
-              fill={PALETTE.crestFront}
-              stroke={PALETTE.hoodieDark}
-              strokeWidth="1"
-            />
-          </g>
+          {/*
+            Clickable zones — adjust percentages to match your image.
+            These should roughly cover:
+            - Head/Hoodie area: top 0–40%
+            - Belly: middle 40–65%
+            - Beak/Nose: small area in the face
+            - Wings: sides middle
+            - Feet: bottom 85–100%
+          */}
 
-          {/* Hoodie — torso / body (clickable) */}
-          <g
-            onClick={(e) => {
-              addRipple(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-              onTapBelly?.();
-            }}
-            style={{ cursor: "pointer" }}
-          >
-            {/* Main hoodie body */}
-            <path
-              d="M 85 190 Q 70 260 85 300 Q 110 310 160 310 Q 210 310 235 300 Q 250 260 235 190"
-              fill={PALETTE.hoodie}
-              stroke={PALETTE.hoodieDark}
-              strokeWidth="2"
-            />
-            {/* Hoodie trim / collar */}
-            <path
-              d="M 120 190 Q 140 182 160 182 Q 180 182 200 190"
-              stroke={PALETTE.hoodieTrim}
-              strokeWidth="3"
-              fill="none"
-            />
-            {/* Hoodie drawstrings */}
-            <line x1="152" y1="195" x2="148" y2="215" stroke={PALETTE.hoodieTrim} strokeWidth="2" strokeLinecap="round" />
-            <line x1="168" y1="195" x2="172" y2="215" stroke={PALETTE.hoodieTrim} strokeWidth="2" strokeLinecap="round" />
-            {/* "M" on chest */}
-            <text
-              x="160"
-              y="260"
-              textAnchor="middle"
-              fontSize="36"
-              fontWeight="bold"
-              fill={PALETTE.hoodieDark}
-              fontFamily="system-ui, sans-serif"
-              opacity="0.5"
-            >
-              M
-            </text>
-          </g>
+          {/* Head — top portion (hoodie/face area) */}
+          <div
+            className="absolute z-10"
+            style={{ top: 0, left: 0, right: 0, height: "42%" }}
+            onClick={(e) =>
+              handleZoneTap("head", e.nativeEvent.offsetX, e.nativeEvent.offsetY)
+            }
+            title="Head"
+          />
 
-          {/* Head — yellow bird face (clickable) */}
-          <g
-            onClick={(e) => {
-              addRipple(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-              onTapHead?.();
-            }}
-            style={{ cursor: "pointer" }}
-          >
-            {/* Head circle */}
-            <ellipse cx="160" cy="140" rx="80" ry="75" fill={PALETTE.body} stroke={PALETTE.bodyDark} strokeWidth="2" />
-            {/* Face highlight */}
-            <ellipse cx="160" cy="135" rx="72" ry="65" fill={PALETTE.body} />
+          {/* Beak — small center area on face */}
+          <div
+            className="absolute z-10"
+            style={{ top: "30%", left: "40%", width: "20%", height: "8%" }}
+            onClick={(e) =>
+              handleZoneTap("beak", e.nativeEvent.offsetX, e.nativeEvent.offsetY)
+            }
+            title="Beak"
+          />
 
-            {/* Wings / arms (clickable) */}
-            <g
-              onClick={(e) => {
-                addRipple(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-                onTapWing?.();
+          {/* Belly — body/torso */}
+          <div
+            className="absolute z-10"
+            style={{ top: "40%", left: 0, right: 0, bottom: "22%" }}
+            onClick={(e) =>
+              handleZoneTap("belly", e.nativeEvent.offsetX, e.nativeEvent.offsetY)
+            }
+            title="Belly"
+          />
+
+          {/* Left wing */}
+          <div
+            className="absolute z-10"
+            style={{ top: "42%", left: 0, width: "18%", height: "28%" }}
+            onClick={(e) =>
+              handleZoneTap("wing", e.nativeEvent.offsetX, e.nativeEvent.offsetY)
+            }
+            title="Left Wing"
+          />
+
+          {/* Right wing */}
+          <div
+            className="absolute z-10"
+            style={{ top: "42%", right: 0, width: "18%", height: "28%" }}
+            onClick={(e) =>
+              handleZoneTap("wing", e.nativeEvent.offsetX, e.nativeEvent.offsetY)
+            }
+            title="Right Wing"
+          />
+
+          {/* Feet — bottom portion */}
+          <div
+            className="absolute z-10"
+            style={{ bottom: 0, left: 0, right: 0, height: "22%" }}
+            onClick={(e) =>
+              handleZoneTap("feet", e.nativeEvent.offsetX, e.nativeEvent.offsetY)
+            }
+            title="Feet"
+          />
+        </div>
+
+        {/* Sleeping zzz overlay */}
+        {emotion === "sleepy" && (
+          <div className="absolute inset-0 pointer-events-none">
+            <motion.div
+              initial={{ opacity: 0, x: 60, y: -30 }}
+              animate={{
+                opacity: [0, 1, 0],
+                x: [60, 100],
+                y: [-30, -80],
+                scale: [0.8, 1.2],
               }}
-              style={{ cursor: "pointer" }}
+              transition={{ duration: 2.5, repeat: Infinity }}
+              className="absolute text-lg font-bold text-slate-600"
             >
-              {/* Left wing */}
-              <motion.path
-                d="M 80 200 Q 50 230 55 260 Q 60 275 85 270 Q 90 260 85 240"
-                fill={PALETTE.hoodie}
-                stroke={PALETTE.hoodieDark}
-                strokeWidth="2"
-                animate={emotion === "happy" || emotion === "laughing" ? { rotate: [0, -15, 0] } : { rotate: 0 }}
-                style={{ transformOrigin: "80px 200px" }}
-                transition={{ duration: 0.6, repeat: Infinity }}
-              />
-              {/* Right wing */}
-              <motion.path
-                d="M 240 200 Q 270 230 265 260 Q 260 275 235 270 Q 230 260 235 240"
-                fill={PALETTE.hoodie}
-                stroke={PALETTE.hoodieDark}
-                strokeWidth="2"
-                animate={emotion === "happy" || emotion === "laughing" ? { rotate: [0, 15, 0] } : { rotate: 0 }}
-                style={{ transformOrigin: "240px 200px" }}
-                transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }}
-              />
-            </g>
-
-            {/* Eyes */}
-            <g>
-              {/* Eye whites */}
-              <ellipse cx="130" cy="130" rx="20" ry={blink ? 2 : 24} fill={PALETTE.eyeWhite} stroke={PALETTE.hoodieDark} strokeWidth="2" />
-              <ellipse cx="190" cy="130" rx="20" ry={blink ? 2 : 24} fill={PALETTE.eyeWhite} stroke={PALETTE.hoodieDark} strokeWidth="2" />
-
-              {/* Pupils — shift by emotion */}
-              {!blink && (
-                <>
-                  <motion.ellipse
-                    cx={130 + pupilOffset.x}
-                    cy={130 + pupilOffset.y}
-                    rx="9"
-                    ry="12"
-                    fill={PALETTE.pupil}
-                    animate={
-                      emotion === "surprised"
-                        ? { rx: 13, ry: 15 }
-                        : emotion === "happy" || emotion === "love"
-                          ? { rx: 5, ry: 5 }
-                          : emotion === "sleepy"
-                            ? { ry: 5 }
-                            : { rx: 9, ry: 12 }
-                    }
-                    transition={{ duration: 0.2 }}
-                  />
-                  <motion.ellipse
-                    cx={190 + pupilOffset.x}
-                    cy={130 + pupilOffset.y}
-                    rx="9"
-                    ry="12"
-                    fill={PALETTE.pupil}
-                    animate={
-                      emotion === "surprised"
-                        ? { rx: 13, ry: 15 }
-                        : emotion === "happy" || emotion === "love"
-                          ? { rx: 5, ry: 5 }
-                          : emotion === "sleepy"
-                            ? { ry: 5 }
-                            : { rx: 9, ry: 12 }
-                    }
-                    transition={{ duration: 0.2 }}
-                  />
-                  {/* Eye highlights */}
-                  <circle cx={133 + pupilOffset.x} cy={125 + pupilOffset.y} r="3" fill="white" />
-                  <circle cx={193 + pupilOffset.x} cy={125 + pupilOffset.y} r="3" fill="white" />
-                </>
-              )}
-            </g>
-
-            {/* Cheeks (blush) */}
-            <circle cx="100" cy="150" r="9" fill={PALETTE.cheek} opacity="0.5" />
-            <circle cx="220" cy="150" r="9" fill={PALETTE.cheek} opacity="0.5" />
-
-            {/* Sleeping zzz */}
-            {emotion === "sleepy" && (
-              <g opacity="0.8">
-                <text x="220" y="70" fontSize="22" fill={PALETTE.hoodieDark} fontFamily="system-ui">z</text>
-                <text x="240" y="52" fontSize="28" fill={PALETTE.hoodieDark} fontFamily="system-ui">z</text>
-                <text x="262" y="36" fontSize="34" fill={PALETTE.hoodieDark} fontFamily="system-ui">Z</text>
-              </g>
-            )}
-
-            {/* Beak (clickable) */}
-            <g
-              onClick={(e) => {
-                addRipple(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-                onTapBeak?.();
+              z
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 70, y: -40 }}
+              animate={{
+                opacity: [0, 1, 0],
+                x: [70, 120],
+                y: [-40, -100],
+                scale: [0.8, 1.4],
               }}
-              style={{ cursor: "pointer" }}
+              transition={{ duration: 2.5, repeat: Infinity, delay: 0.8 }}
+              className="absolute text-xl font-bold text-slate-600"
             >
-              <path
-                d="M 148 158 Q 160 172 172 158 Q 166 168 160 170 Q 154 168 148 158 Z"
-                fill={PALETTE.beak}
-                stroke={PALETTE.beakDark}
-                strokeWidth="1.5"
-              />
-            </g>
+              z
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, x: 80, y: -50 }}
+              animate={{
+                opacity: [0, 1, 0],
+                x: [80, 140],
+                y: [-50, -120],
+                scale: [0.8, 1.6],
+              }}
+              transition={{ duration: 2.5, repeat: Infinity, delay: 1.6 }}
+              className="absolute text-2xl font-bold text-slate-600"
+            >
+              Z
+            </motion.div>
+          </div>
+        )}
 
-            {/* Mouth — animated when talking */}
-            <g ref={mouthRef} style={{ transformOrigin: "160px 165px" }}>
-              {emotion === "talking" ? (
-                <ellipse cx="160" cy="165" rx="10" ry="12" fill={PALETTE.beakDark} />
-              ) : emotion === "laughing" ? (
-                <path
-                  d="M 145 160 Q 160 182 175 160 Q 168 172 160 176 Q 152 172 145 160 Z"
-                  fill={PALETTE.beak}
-                  stroke={PALETTE.beakDark}
-                  strokeWidth="1.5"
-                />
-              ) : emotion === "happy" || emotion === "love" ? (
-                <path
-                  d="M 148 162 Q 160 178 172 162"
-                  stroke={PALETTE.beakDark}
-                  strokeWidth="3"
-                  fill="none"
-                  strokeLinecap="round"
-                />
-              ) : emotion === "surprised" ? (
-                <circle cx="160" cy="167" r="10" fill={PALETTE.beak} stroke={PALETTE.beakDark} strokeWidth="1.5" />
-              ) : emotion === "sad" ? (
-                <path
-                  d="M 148 172 Q 160 162 172 172"
-                  stroke={PALETTE.beakDark}
-                  strokeWidth="3"
-                  fill="none"
-                  strokeLinecap="round"
-                />
-              ) : (
-                <path
-                  d="M 150 163 Q 160 170 170 163"
-                  stroke={PALETTE.beakDark}
-                  strokeWidth="2.5"
-                  fill="none"
-                  strokeLinecap="round"
-                />
-              )}
-            </g>
-
-            {/* Love hearts */}
-            {(emotion === "love" || emotion === "happy") && (
-              <g>
-                <motion.text
-                  x="40" y="90" fontSize="28" fill="#e74c3c"
-                  animate={{ y: [90, 60, 90], opacity: [0, 1, 0] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >♥
-                </motion.text>
-                <motion.text
-                  x="250" y="100" fontSize="22" fill="#e74c3c"
-                  animate={{ y: [100, 70, 100], opacity: [0, 1, 0] }}
-                  transition={{ duration: 2, repeat: Infinity, delay: 0.6 }}
-                >♥
-                </motion.text>
-              </g>
-            )}
-          </g>
-
-          {/* Feet (clickable) */}
-          <g
-            onClick={(e) => {
-              addRipple(e.nativeEvent.offsetX, e.nativeEvent.offsetY);
-              onTapFoot?.();
-            }}
-            style={{ cursor: "pointer" }}
-          >
-            {/* Left foot */}
-            <motion.ellipse
-              cx="120" cy="308" rx="20" ry="8"
-              fill={PALETTE.foot}
-              stroke={PALETTE.footDark}
-              strokeWidth="2"
-              animate={emotion === "happy" || emotion === "laughing" ? { rotate: [0, -20, 20, 0] } : { rotate: 0 }}
-              style={{ transformOrigin: "120px 308px" }}
-              transition={{ duration: 0.5, repeat: Infinity }}
-            />
-            {/* Right foot */}
-            <motion.ellipse
-              cx="200" cy="308" rx="20" ry="8"
-              fill={PALETTE.foot}
-              stroke={PALETTE.footDark}
-              strokeWidth="2"
-              animate={emotion === "happy" || emotion === "laughing" ? { rotate: [0, 20, -20, 0] } : { rotate: 0 }}
-              style={{ transformOrigin: "200px 308px" }}
-              transition={{ duration: 0.5, repeat: Infinity, delay: 0.2 }}
-            />
-          </g>
-        </svg>
+        {/* Love hearts overlay */}
+        {(emotion === "love" || emotion === "happy") && (
+          <div className="absolute inset-0 pointer-events-none">
+            <motion.div
+              className="absolute text-2xl text-red-400"
+              style={{ left: "5%", top: "10%" }}
+              animate={{ y: [0, -40, 0], opacity: [0, 1, 0], scale: [0.8, 1.2, 0.8] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              ♥
+            </motion.div>
+            <motion.div
+              className="absolute text-2xl text-red-400"
+              style={{ right: "5%", top: "15%" }}
+              animate={{ y: [0, -40, 0], opacity: [0, 1, 0], scale: [0.8, 1.2, 0.8] }}
+              transition={{ duration: 2, repeat: Infinity, delay: 0.6 }}
+            >
+              ♥
+            </motion.div>
+          </div>
+        )}
       </motion.div>
 
       {/* Speech bubble */}

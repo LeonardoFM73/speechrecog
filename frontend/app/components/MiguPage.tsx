@@ -42,7 +42,7 @@ export default function MiguPage() {
 
   // Transcription state
   const [status, setStatus] = useState<TranscriptionStatus>("idle");
-  const [resultText, setResultText] = useState<string>("");
+  const [transcribedText, setTranscribedText] = useState<string>("");
   const [resultDuration, setResultDuration] = useState<number>(0);
   const [error, setError] = useState<string>("");
   const [language, setLanguage] = useState<string>("");
@@ -53,6 +53,9 @@ export default function MiguPage() {
   // UI state
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [historyOpen, setHistoryOpen] = useState<boolean>(false);
+
+  // Debug panel
+  const [debugOpen, setDebugOpen] = useState(false);
 
   const session = useSessionContext();
   const migu = useMiguReactions();
@@ -114,14 +117,26 @@ export default function MiguPage() {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      console.log("[DEBUG] fetch speakers dari", API_BASE + "/speakers");
       try {
         const list = await ttsClient.listSpeakers(API_BASE);
+        console.log("[DEBUG] speakers loaded:", list.length, list.map(s => `${s.id}|${s.label}`));
         if (cancelled) return;
         setSpeakers(list);
-        if (list.length > 0 && !list.some((s) => s.id === selectedSpeaker.id)) {
-          setSelectedSpeaker(list[0]);
+        // Try to keep the selected speaker consistent — find match by name+style
+        const prevLabel = selectedSpeaker.label;
+        const match = list.find(
+          (s) => s.label === prevLabel || `${s.name} — ${s.style}` === prevLabel
+        );
+        console.log("[DEBUG] match speaker by label:", prevLabel, "→", match?.id ?? "tidak ada");
+        if (match) {
+          console.log("[DEBUG] selectedSpeaker di-set:", match.label);
+          setSelectedSpeaker(match);
+        } else {
+          console.warn("[DEBUG] Tidak match speaker dari VOICEVOX, menggunakan", selectedSpeaker.label);
         }
-      } catch {
+      } catch (e) {
+        console.error("[DEBUG] GAGAL fetch speakers:", e);
         if (!cancelled) setSpeakers([]);
       }
     };
@@ -138,13 +153,15 @@ export default function MiguPage() {
     if (!doc) return;
     if (doc.messages.length === 0) return;
     setHistory(
-      doc.messages.map((m): ChatMessage => ({
-        role: m.user_text ? "user" : "model",
-        text: m.user_text || m.ai_reply_jp || "",
-        translation: m.ai_reply_translation ?? undefined,
-        audioUrl: undefined,
-        ts: m.ts,
-      })),
+      doc.messages
+        .filter((m) => m.ai_reply_jp) // only roleplay turns
+        .map((m): ChatMessage => ({
+          role: m.user_text ? "user" : "model",
+          text: m.user_text || m.ai_reply_jp || "",
+          translation: m.ai_reply_translation ?? undefined,
+          audioUrl: undefined,
+          ts: m.ts,
+        })),
     );
     if (doc.mode === "roleplay" || doc.mode === "transcribe") {
       setMode(doc.mode);
@@ -163,7 +180,7 @@ export default function MiguPage() {
       if (found) setSelectedSpeaker(found);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.hydrated?.session_id]);
+  }, [session.hydrated?.session_id, speakers]);
 
   // Persist meta
   useEffect(() => {
@@ -199,7 +216,7 @@ export default function MiguPage() {
 
   const handleStart = useCallback(async () => {
     setError("");
-    setResultText("");
+    setTranscribedText("");
     setStatus("recording");
     migu.listen();
     try {
@@ -253,10 +270,10 @@ export default function MiguPage() {
       return;
     }
 
-    setResultText(uploadResult.text);
+    setTranscribedText(uploadResult.text);
     setResultDuration(uploadResult.duration ?? 0);
     setLanguage(uploadResult.language ?? "");
-    migu.showSpeech(uploadResult.text, 4000);
+    migu.showSpeech(transcribedText, 4000);
 
     if (!session.sessionId) {
       await session.start();
@@ -396,7 +413,7 @@ export default function MiguPage() {
     return migu.emotion;
   })();
 
-  const effectiveSpeech = migu.speechText || resultText;
+  const effectiveSpeech = migu.speechText || transcribedText;
 
   const denied = hasPermission === false;
 
@@ -409,6 +426,30 @@ export default function MiguPage() {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-sky-300 via-sky-100 to-amber-50">
+      {/* Debug toggle */}
+      <button
+        type="button"
+        onClick={() => setDebugOpen(prev => !prev)}
+        className="fixed top-2 right-2 z-50 rounded bg-black/70 px-2 py-1 text-[10px] font-mono text-white backdrop-blur hover:bg-black/90"
+      >
+        {debugOpen ? "❌ DEBUG" : "🐛 DEBUG"}
+      </button>
+      {debugOpen && (
+        <div className="fixed top-10 right-2 z-50 w-80 rounded-lg border border-slate-200 bg-black/80 p-3 text-[11px] font-mono leading-relaxed text-green-400 shadow-lg backdrop-blur">
+          <div className="mb-2 font-bold text-white">DIAGNOSTIC PANEL</div>
+          <div>API_BASE: {API_BASE}</div>
+          <div>speakers loaded: {speakers.length}</div>
+          <div>selectedSpeaker: {selectedSpeaker.id} | {selectedSpeaker.label}</div>
+          <div>ttsReady: {ttsReady ? "✅" : "❌"}</div>
+          <div>chatReady: {chatReady ? "✅" : "❌"}</div>
+          <div>session: {session.sessionId ?? "(null)"}</div>
+          <div>hydrated: {session.hydrated?.session_id ?? "(null)"}</div>
+          <div className="mt-2 border-t border-slate-700 pt-2 text-yellow-300">
+            Open browser Console (F12) to see [DEBUG] logs.
+            {'\n'}Click "Suara AI" to trigger onChange debug.
+          </div>
+        </div>
+      )}
       <RoomBackground />
 
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-md flex-col items-center px-4 pb-32 pt-6">
@@ -495,7 +536,6 @@ export default function MiguPage() {
                       selected={selectedSpeaker}
                       onChange={setSelectedSpeaker}
                       available={speakers}
-                      disabled={!ttsReady}
                     />
                   </div>
                 )}
@@ -570,12 +610,12 @@ export default function MiguPage() {
           )}
 
           {/* Result text (last transcription) */}
-          {resultText && status === "complete" && (
+          {transcribedText && mode === "transcribe" && status === "complete" && (
             <div className="mt-4 w-full max-w-sm rounded-2xl border border-amber-200 bg-white/80 p-3 text-sm text-slate-800 shadow-sm backdrop-blur">
               <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
                 Kamu bilang
               </div>
-              <div className="mt-1 leading-relaxed">{resultText}</div>
+              <div className="mt-1 leading-relaxed">{transcribedText}</div>
             </div>
           )}
 
@@ -638,34 +678,59 @@ export default function MiguPage() {
       <AnimatePresence>
         {historyOpen && mode === "roleplay" && history.length > 0 && (
           <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 260, damping: 30 }}
-            className="fixed inset-x-0 bottom-0 z-30 max-h-[60vh] overflow-y-auto rounded-t-3xl bg-white p-4 shadow-2xl"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+            onClick={() => setHistoryOpen(false)}
           >
-            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-300" />
-            <h2 className="mb-3 text-center text-lg font-bold text-slate-800">Riwayat Percakapan</h2>
-            <div className="space-y-2">
-              {history.map((m, i) => (
-                <div
-                  key={i}
-                  className={`rounded-2xl px-3 py-2 text-sm ${
-                    m.role === "user"
-                      ? "ml-auto max-w-[80%] bg-amber-100 text-slate-800"
-                      : "mr-auto max-w-[80%] bg-rose-100 text-slate-800"
-                  }`}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 260, damping: 30 }}
+              className="relative mx-auto mt-16 flex h-[80vh] max-w-md flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close button */}
+              <div className="flex items-center justify-between px-4 pt-4">
+                <h2 className="text-lg font-bold text-slate-800">Riwayat Percakapan</h2>
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
+                  aria-label="Close history"
                 >
-                  <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                    {m.role === "user" ? "Kamu" : "Migu"}
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Draggable handle */}
+              <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-slate-300" />
+
+              {/* Messages list */}
+              <div className="flex-1 space-y-2 overflow-y-auto px-4 pb-8">
+                {history.map((m, i) => (
+                  <div
+                    key={i}
+                    className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                      m.role === "user"
+                        ? "ml-auto max-w-[80%] bg-amber-100 text-slate-800"
+                        : "mr-auto max-w-[80%] bg-rose-100 text-slate-800"
+                    }`}
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                      {m.role === "user" ? "Kamu" : "Migu"}
+                    </div>
+                    <div className="mt-0.5">{m.text}</div>
+                    {m.translation && (
+                      <div className="mt-1 text-xs italic text-slate-600">{m.translation}</div>
+                    )}
                   </div>
-                  <div className="mt-0.5">{m.text}</div>
-                  {m.translation && (
-                    <div className="mt-1 text-xs italic text-slate-600">{m.translation}</div>
-                  )}
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
