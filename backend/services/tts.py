@@ -25,10 +25,12 @@ class TtsService:
         self,
         base_url: str,
         default_speaker: int,
+        default_speed: float = 1.0,
         timeout: float = 15.0,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._default_speaker = default_speaker
+        self._default_speed = default_speed
         self._timeout = timeout
         self._client: httpx.AsyncClient | None = None
         self._speakers_cache: list[dict[str, Any]] | None = None
@@ -119,6 +121,7 @@ class TtsService:
         )
         q.raise_for_status()
         query = q.json()
+        query["speedScale"] = self._default_speed
 
         # Step 2: synthesise to WAV
         s = await self._client.post(
@@ -149,7 +152,7 @@ def is_ready() -> bool:
     return _tts_service is not None and _tts_service.is_loaded
 
 
-async def initialise(base_url: str, default_speaker: int) -> TtsService:
+async def initialise(base_url: str, default_speaker: int, default_speed: float = 1.0) -> TtsService:
     """Create the singleton and warm it up.
 
     Raises httpx.HTTPError if the engine is unreachable — caller should
@@ -161,6 +164,7 @@ async def initialise(base_url: str, default_speaker: int) -> TtsService:
     _tts_service = TtsService(
         base_url=base_url,
         default_speaker=default_speaker,
+        default_speed=default_speed,
     )
     await _tts_service.initialise()
     return _tts_service

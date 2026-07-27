@@ -80,8 +80,13 @@ async def lifespan(app: FastAPI):
     try:
         voicevox_url = os.environ.get("VOICEVOX_URL", "http://10.100.101.12:50021")
         voicevox_speaker = int(os.environ.get("VOICEVOX_DEFAULT_SPEAKER", "2"))
-        await tts_service.initialise(base_url=voicevox_url, default_speaker=voicevox_speaker)
-        logger.info("TTS service ready (VOICEVOX)")
+        voicevox_speed = float(os.environ.get("VOICEVOX_DEFAULT_SPEED", "1.0"))
+        await tts_service.initialise(
+            base_url=voicevox_url,
+            default_speaker=voicevox_speaker,
+            default_speed=voicevox_speed,
+        )
+        logger.info("TTS service ready (VOICEVOX) speed=%s", voicevox_speed)
     except Exception as exc:
         logger.warning("TTS service disabled: %s (start VOICEVOX engine to enable)", exc)
 
