@@ -20,3 +20,5 @@ dist/
 # Containers
 .docker/
 .dockerenv
+
+image.png
