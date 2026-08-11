@@ -185,6 +185,49 @@ export const ttsClient = {
 };
 
 // ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  username: string;
+}
+
+export const authClient = {
+  async login(baseUrl: string, username: string, password: string): Promise<TokenResponse> {
+    const r = await fetch(`${baseUrl}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!r.ok) {
+      const json = await r.json().catch(() => ({}));
+      throw new ApiError(r.status, (json.detail as string) ?? `HTTP ${r.status}`);
+    }
+    return r.json();
+  },
+  async register(baseUrl: string, username: string, password: string): Promise<TokenResponse> {
+    const r = await fetch(`${baseUrl}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!r.ok) {
+      const json = await r.json().catch(() => ({}));
+      throw new ApiError(r.status, (json.detail as string) ?? `HTTP ${r.status}`);
+    }
+    return r.json();
+  },
+  async me(baseUrl: string, token: string): Promise<{ username: string }> {
+    const r = await fetch(`${baseUrl}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) throw new Error(`Auth check failed: ${r.status}`);
+    return r.json();
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Session persistence
 // ---------------------------------------------------------------------------
 export interface SessionTurn {
@@ -203,6 +246,7 @@ export interface SessionTurn {
 
 export interface SessionDoc {
   session_id: string;
+  username: string;
   started_at: string;
   ended_at: string | null;
   mode: "transcribe" | "roleplay";
@@ -217,35 +261,44 @@ export interface SessionDoc {
 }
 
 export const sessionClient = {
-  async create(session_id: string, apiBase: string): Promise<SessionDoc> {
+  async create(session_id: string, apiBase: string, token: string): Promise<SessionDoc> {
     const r = await fetch(`${apiBase}/sessions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ session_id }),
     });
     if (!r.ok) throw new Error(`Session create failed: ${r.status}`);
     return r.json();
   },
-  async update(session_id: string, patch: Partial<SessionDoc>, apiBase: string): Promise<SessionDoc> {
+  async list(apiBase: string, token: string): Promise<SessionDoc[]> {
+    const r = await fetch(`${apiBase}/sessions`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) throw new Error(`Session list failed: ${r.status}`);
+    return r.json();
+  },
+  async update(session_id: string, patch: Partial<SessionDoc>, apiBase: string, token: string): Promise<SessionDoc> {
     const r = await fetch(`${apiBase}/sessions/${session_id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(patch),
     });
     if (!r.ok) throw new Error(`Session update failed: ${r.status}`);
     return r.json();
   },
-  async appendMessage(session_id: string, turn: SessionTurn, apiBase: string): Promise<{ turn: number }> {
+  async appendMessage(session_id: string, turn: SessionTurn, apiBase: string, token: string): Promise<{ turn: number }> {
     const r = await fetch(`${apiBase}/sessions/${session_id}/messages`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(turn),
     });
     if (!r.ok) throw new Error(`Message append failed: ${r.status}`);
     return r.json();
   },
-  async get(session_id: string, apiBase: string): Promise<SessionDoc | null> {
-    const r = await fetch(`${apiBase}/sessions/${session_id}`);
+  async get(session_id: string, apiBase: string, token: string): Promise<SessionDoc | null> {
+    const r = await fetch(`${apiBase}/sessions/${session_id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (r.status === 404) return null;
     if (!r.ok) throw new Error(`Session fetch failed: ${r.status}`);
     return r.json();

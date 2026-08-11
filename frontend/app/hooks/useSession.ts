@@ -26,15 +26,21 @@ function uuidv4(): string {
   });
 }
 
-export function useSession(apiBase: string): UseSession {
+export function useSession(apiBase: string, token: string | null): UseSession {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState<SessionDoc | null>(null);
   const [ready, setReady] = useState(false);
   const [dbReady, setDbReady] = useState(true);
   const apiBaseRef = useRef(apiBase);
+  const tokenRef = useRef(token);
   apiBaseRef.current = apiBase;
+  tokenRef.current = token;
 
   useEffect(() => {
+    if (!token) {
+      setReady(true);
+      return;
+    }
     const id = localStorage.getItem(STORAGE_KEY);
     if (!id) {
       setReady(true);
@@ -42,7 +48,7 @@ export function useSession(apiBase: string): UseSession {
     }
     setSessionId(id);
     sessionClient
-      .get(id, apiBaseRef.current)
+      .get(id, apiBaseRef.current, token)
       .then((doc) => {
         setHydrated(doc);
         setReady(true);
@@ -51,12 +57,12 @@ export function useSession(apiBase: string): UseSession {
         setDbReady(false);
         setReady(true);
       });
-  }, []);
+  }, [token]);
 
   const start = useCallback(async () => {
     const id = uuidv4();
     try {
-      const doc = await sessionClient.create(id, apiBaseRef.current);
+      const doc = await sessionClient.create(id, apiBaseRef.current, tokenRef.current!);
       localStorage.setItem(STORAGE_KEY, id);
       setSessionId(id);
       setHydrated(doc);
@@ -66,6 +72,7 @@ export function useSession(apiBase: string): UseSession {
       setSessionId(id);
       setHydrated({
         session_id: id,
+        username: "",
         started_at: new Date().toISOString(),
         ended_at: null,
         mode: "roleplay",
@@ -82,9 +89,14 @@ export function useSession(apiBase: string): UseSession {
   }, []);
 
   const end = useCallback(async () => {
-    if (!sessionId) return;
+    if (!sessionId || !tokenRef.current) return;
     try {
-      await sessionClient.update(sessionId, { ended_at: new Date().toISOString() }, apiBaseRef.current);
+      await sessionClient.update(
+        sessionId,
+        { ended_at: new Date().toISOString() },
+        apiBaseRef.current,
+        tokenRef.current,
+      );
     } catch {
       /* swallow */
     } finally {
@@ -96,9 +108,14 @@ export function useSession(apiBase: string): UseSession {
 
   const updateMeta = useCallback(
     async (patch: Partial<SessionDoc>) => {
-      if (!sessionId) return;
+      if (!sessionId || !tokenRef.current) return;
       try {
-        const doc = await sessionClient.update(sessionId, patch, apiBaseRef.current);
+        const doc = await sessionClient.update(
+          sessionId,
+          patch,
+          apiBaseRef.current,
+          tokenRef.current,
+        );
         setHydrated(doc);
         setDbReady(true);
       } catch {
@@ -110,9 +127,14 @@ export function useSession(apiBase: string): UseSession {
 
   const appendTurn = useCallback(
     async (turn: SessionTurn) => {
-      if (!sessionId) return;
+      if (!sessionId || !tokenRef.current) return;
       try {
-        await sessionClient.appendMessage(sessionId, turn, apiBaseRef.current);
+        await sessionClient.appendMessage(
+          sessionId,
+          turn,
+          apiBaseRef.current,
+          tokenRef.current,
+        );
         setDbReady(true);
       } catch {
         setDbReady(false);

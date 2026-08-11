@@ -28,6 +28,9 @@ from services.transcriber import initialise, get_service
 from services import chat as chat_service
 from services import tts as tts_service
 from services import sessions as sessions_service
+from services import users as users_service
+from services import auth as auth_service
+from models.schemas import UserCreateRequest, LoginRequest, TokenResponse
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -89,6 +92,16 @@ async def lifespan(app: FastAPI):
         logger.info("TTS service ready (VOICEVOX) speed=%s", voicevox_speed)
     except Exception as exc:
         logger.warning("TTS service disabled: %s (start VOICEVOX engine to enable)", exc)
+
+    # Users — MongoDB is optional.
+    try:
+        await users_service.ensure_indexes()
+        if await sessions_service.ping():
+            logger.info("Users ready (MongoDB at %s)", os.environ.get("MONGODB_URL", "mongodb://mongo:27017"))
+        else:
+            logger.warning("Users: MongoDB unreachable")
+    except Exception as exc:
+        logger.warning("Users disabled: %s", exc)
 
     # Sessions — MongoDB is optional. If unreachable, /sessions returns 503
     # but transcription / chat / TTS still work.
@@ -295,6 +308,41 @@ async def chat(req: ChatRequest) -> Any:
 
 
 # ---------------------------------------------------------------------------
+# Auth endpoints
+# ---------------------------------------------------------------------------
+@app.post("/auth/register", response_model=TokenResponse)
+async def register(payload: UserCreateRequest) -> Any:
+    existing = await users_service.get_user(payload.username)
+    if existing:
+        raise HTTPException(status_code=409, detail="Username already taken")
+    password_hash = users_service.hash_password(payload.password)
+    await users_service.create_user(payload.username, password_hash)
+    token = auth_service.create_token(payload.username)
+    return {"access_token": token, "token_type": "bearer", "username": payload.username}
+
+
+@app.post("/auth/login", response_model=TokenResponse)
+async def login(payload: LoginRequest) -> Any:
+    user = await users_service.get_user(payload.username)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not users_service.verify_password(payload.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = auth_service.create_token(payload.username)
+    return {"access_token": token, "token_type": "bearer", "username": payload.username}
+
+
+@app.get("/auth/me")
+async def me(authorization: str | None = Header(default=None)) -> Any:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    username = auth_service.decode_token(authorization[len("Bearer "):])
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return {"username": username}
+
+
+# ---------------------------------------------------------------------------
 # Session persistence router
 # ---------------------------------------------------------------------------
 app.include_router(sessions_service.router)
@@ -304,3 +352,4 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=False)
+

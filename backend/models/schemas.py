@@ -130,6 +130,28 @@ class TtsRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Session persistence schemas
 # ---------------------------------------------------------------------------
+class UserCreateRequest(BaseModel):
+    """POST /auth/register request body."""
+
+    username: str = Field(min_length=3, max_length=32, description="Unique username")
+    password: str = Field(min_length=6, max_length=128, description="Password")
+
+
+class LoginRequest(BaseModel):
+    """POST /auth/login request body."""
+
+    username: str = Field(min_length=1, max_length=32)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class TokenResponse(BaseModel):
+    """POST /auth/login /auth/register response."""
+
+    access_token: str = Field(description="JWT token")
+    token_type: str = Field(default="bearer")
+    username: str = Field(description="Authenticated username")
+
+
 class SessionCreateRequest(BaseModel):
     """POST /sessions request body."""
 
@@ -172,6 +194,7 @@ class SessionDoc(BaseModel):
     """A persisted roleplay/transcribe session."""
 
     session_id: str
+    username: str = Field(description="Owner of this session")
     started_at: float = Field(description="Unix epoch seconds")
     ended_at: float | None = Field(default=None, description="Unix epoch seconds; null until close")
     mode: Literal["transcribe", "roleplay"] = "roleplay"

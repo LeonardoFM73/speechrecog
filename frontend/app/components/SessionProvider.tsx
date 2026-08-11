@@ -2,11 +2,13 @@
 
 import { createContext, useContext, ReactNode } from "react";
 import { useSession, UseSession } from "@/hooks/useSession";
+import { useAuth } from "@/context/AuthContext";
 
 const SessionContext = createContext<UseSession | null>(null);
 
 export function SessionProvider({ children, apiBase }: { children: ReactNode; apiBase: string }) {
-  const value = useSession(apiBase);
+  const { token } = useAuth();
+  const value = useSession(apiBase, token);
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 

@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
 from pymongo import DESCENDING
 
@@ -17,6 +17,7 @@ from models.schemas import (
     SessionPatchRequest,
     SessionTurn,
 )
+from services import auth as auth_service
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,8 @@ async def ensure_indexes() -> None:
         await col.create_index("session_id", unique=True)
         await col.create_index([("started_at", DESCENDING)])
         await col.create_index("messages.scenario_switched")
+        await col.create_index("username")
+        await col.create_index([("username", 1), ("started_at", DESCENDING)])
     except Exception as exc:
         logger.warning("ensure_indexes failed: %s", exc)
 
@@ -61,15 +64,39 @@ async def ping() -> bool:
         return False
 
 
+async def current_user(authorization: str | None = Header(default=None)) -> str:
+    """FastAPI dependency: extract and verify JWT, return username."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = authorization[len("Bearer "):]
+    username = auth_service.decode_token(token)
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return username
+
+
 async def get_session(session_id: str) -> dict | None:
     doc = await _Store.get_collection().find_one({"session_id": session_id}, {"_id": 0})
     return doc
 
 
-async def create_or_get_session(payload: SessionCreateRequest) -> dict:
+async def list_user_sessions(username: str) -> list[dict]:
+    cursor = _Store.get_collection().find({"username": username}, {"_id": 0}).sort("started_at", DESCENDING)
+    return await cursor.to_list(length=None)
+
+
+async def get_session_owned(session_id: str, username: str) -> dict | None:
+    doc = await _Store.get_collection().find_one(
+        {"session_id": session_id, "username": username}, {"_id": 0}
+    )
+    return doc
+
+
+async def create_or_get_session(username: str, payload: SessionCreateRequest) -> dict:
     now = float(__import__("time").time())
     new_doc = {
         "session_id": payload.session_id,
+        "username": username,
         "started_at": now,
         "ended_at": None,
         "mode": payload.mode,
@@ -87,26 +114,26 @@ async def create_or_get_session(payload: SessionCreateRequest) -> dict:
         {"$setOnInsert": new_doc},
         upsert=True,
     )
-    stored = await get_session(payload.session_id)
+    stored = await get_session_owned(payload.session_id, username)
     assert stored is not None
     return stored
 
 
-async def patch_session(session_id: str, payload: SessionPatchRequest) -> dict | None:
+async def patch_session(session_id: str, username: str, payload: SessionPatchRequest) -> dict | None:
     patch = {k: v for k, v in payload.model_dump().items() if v is not None}
     if not patch:
-        return await get_session(session_id)
+        return await get_session_owned(session_id, username)
     result = await _Store.get_collection().update_one(
-        {"session_id": session_id}, {"$set": patch}
+        {"session_id": session_id, "username": username}, {"$set": patch}
     )
     if result.matched_count == 0:
         return None
-    return await get_session(session_id)
+    return await get_session_owned(session_id, username)
 
 
-async def append_message(session_id: str, turn: SessionTurn) -> dict:
+async def append_message(session_id: str, username: str, turn: SessionTurn) -> dict:
     result = await _Store.get_collection().update_one(
-        {"session_id": session_id},
+        {"session_id": session_id, "username": username},
         {"$push": {"messages": turn.model_dump()}},
     )
     if result.matched_count == 0:
@@ -121,27 +148,38 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.post("", response_model=SessionDoc)
-async def create_session(payload: SessionCreateRequest) -> Any:
-    doc = await create_or_get_session(payload)
+async def create_session(
+    payload: SessionCreateRequest, username: str = Depends(current_user)
+) -> Any:
+    doc = await create_or_get_session(username, payload)
     return doc
 
 
+@router.get("", response_model=list[SessionDoc])
+async def list_sessions(username: str = Depends(current_user)) -> Any:
+    return await list_user_sessions(username)
+
+
 @router.get("/{session_id}", response_model=SessionDoc)
-async def get_one(session_id: str) -> Any:
-    doc = await get_session(session_id)
+async def get_one(session_id: str, username: str = Depends(current_user)) -> Any:
+    doc = await get_session_owned(session_id, username)
     if not doc:
         raise HTTPException(status_code=404, detail="Session not found")
     return doc
 
 
 @router.patch("/{session_id}", response_model=SessionDoc)
-async def patch_one(session_id: str, payload: SessionPatchRequest) -> Any:
-    doc = await patch_session(session_id, payload)
+async def patch_one(
+    session_id: str, payload: SessionPatchRequest, username: str = Depends(current_user)
+) -> Any:
+    doc = await patch_session(session_id, username, payload)
     if not doc:
         raise HTTPException(status_code=404, detail="Session not found")
     return doc
 
 
 @router.post("/{session_id}/messages", response_model=SessionMessageResponse)
-async def append_one(session_id: str, turn: SessionTurn) -> Any:
-    return await append_message(session_id, turn)
+async def append_one(
+    session_id: str, turn: SessionTurn, username: str = Depends(current_user)
+) -> Any:
+    return await append_message(session_id, username, turn)

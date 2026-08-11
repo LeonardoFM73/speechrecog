@@ -47,6 +47,9 @@ services:
       # Sessions — MongoDB
       - MONGODB_URL=${MONGODB_URL:-mongodb://mongo:27017}
       - MONGODB_DB=${MONGODB_DB:-speechrecog}
+      # Auth — JWT secret (ubah untuk production).
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+      - JWT_EXPIRY_DAYS=${JWT_EXPIRY_DAYS:-30}
 
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health >/dev/null || exit 1"]
