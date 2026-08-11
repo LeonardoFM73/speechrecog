@@ -76,6 +76,9 @@ async def create_or_get_session(payload: SessionCreateRequest) -> dict:
         "scenario_id": payload.scenario_id,
         "scenario_text": payload.scenario_text,
         "speaker_id": payload.speaker_id,
+        "tts_speed": payload.tts_speed,
+        "jp_level": payload.jp_level,
+        "max_turns": payload.max_turns,
         "messages": [],
         "user_metadata": payload.user_metadata or {},
     }

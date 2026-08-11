@@ -194,7 +194,9 @@ async def tts(req: TtsRequest) -> Response:
     speaker = req.speaker or tts_service.get_service().default_speaker
 
     try:
-        wav_bytes = await tts_service.get_service().synthesise(req.text, speaker)
+        wav_bytes = await tts_service.get_service().synthesise(
+            req.text, speaker, speed=req.speed
+        )
     except httpx.HTTPError as exc:
         logger.error("VOICEVOX HTTP error: %s", exc)
         raise HTTPException(status_code=502, detail=f"VOICEVOX engine error: {exc}")
@@ -272,6 +274,8 @@ async def chat(req: ChatRequest) -> Any:
             user_text=req.user_text,
             scenario=req.scenario,
             history=req.history,  # history BEFORE this user turn
+            jp_level=req.jp_level,
+            max_turns=req.max_turns,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

@@ -20,19 +20,35 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # System prompt
 # ---------------------------------------------------------------------------
-SYSTEM_PROMPT_TEMPLATE = """\
+JP_LEVELS = {
+    "basic": ("N4〜N5 レベル、簡単な単語と文型。", "短い文（5〜10文字程度）を心がけてください"),
+    "intermediate": ("N3 レベル目安、自然な会話。", "1〜3文にしてください"),
+    "hard": ("N2〜N1 レベル、自然で複雑な表現。", "2〜4文、必要に応じて丁寧語や慣用表現も使ってください"),
+}
+
+
+def build_system_prompt(scenario: str, history_text: str, jp_level: str, turn_count: int, max_turns: int) -> str:
+    level_info, length_rule = JP_LEVELS.get(jp_level, JP_LEVELS["intermediate"])
+    closing_hint = ""
+    if max_turns and turn_count >= max_turns - 2:
+        closing_hint = (
+            "\n- この会話は大変長くなりました。自然な結論に向けて、"
+            "まとめや別れの挨拶を含めて会話を終わらせてください"
+        )
+    return f"""\
 あなたは日本語の会話パートナーです。
 
 # 状況 / シナリオ
 {scenario}
 
 # ルール
-- 必ず日本語で返答してください (自然な会話、N3 レベル目安)
-- 返答は1〜3文にしてください
+- 必ず日本語で返答してください ({level_info})
+- {length_rule}
 - 最後に「ユーザーへの確認質問」を1つ入れて、会話を続けてください
 - 翻訳 (translation) はインドネシア語で1文、提供してください
 - 必ず以下のJSON形式で出力してください:
   {{"reply_jp": "<日本語の返答>", "reply_translation": "<インドネシア語の翻訳>"}}
+{closing_hint}
 
 # 会話履歴
 {history_text}
@@ -97,6 +113,8 @@ class ChatService:
         user_text: str,
         scenario: str,
         history: list[dict],
+        jp_level: str = "intermediate",
+        max_turns: int = 10,
     ) -> dict[str, str]:
         """Send user text + scenario + history to the LLM, return parsed reply.
 
@@ -106,6 +124,8 @@ class ChatService:
             history: Prior turns, list of {"role": "user"|"assistant", "text": "..."}.
                      The current user_text should NOT be in history (it is added
                      by the endpoint).
+            jp_level: Japanese difficulty level.
+            max_turns: Max turns before AI suggests ending.
 
         Returns:
             {"reply_jp": str, "reply_translation": str}
@@ -122,9 +142,12 @@ class ChatService:
             for m in history[-10:]
         ) or "(no prior messages)"
 
-        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
+        system_prompt = build_system_prompt(
             scenario=(scenario or "").strip() or DEFAULT_SCENARIO,
             history_text=history_text,
+            jp_level=jp_level,
+            turn_count=len(history),
+            max_turns=max_turns,
         )
 
         # OpenAI-compatible: system goes as a system message; user turn appended.

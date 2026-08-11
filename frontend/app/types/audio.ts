@@ -14,6 +14,16 @@ export type TranscriptionStatus =
 // Application mode (single-page has two workflows)
 export type AppMode = "transcribe" | "roleplay";
 
+// Japanese proficiency level
+export type JpLevel = "basic" | "intermediate" | "hard";
+
+export const JP_LEVELS: JpLevel[] = ["basic", "intermediate", "hard"];
+export const JP_LEVEL_LABELS: Record<JpLevel, string> = {
+  basic: "Basic (N4-N5)",
+  intermediate: "Intermediate (N3)",
+  hard: "Hard (N2-N1)",
+};
+
 // Result returned from the backend API
 export interface TranscriptionResult {
   success: boolean;

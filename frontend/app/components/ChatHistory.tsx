@@ -44,7 +44,7 @@ export default function ChatHistory({ messages, lastTranslation, audioForLastRep
 
   if (messages.length === 0) {
     return (
-      <div className="w-full max-w-md rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-400">
+      <div className="w-full max-w-sm rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-400 md:max-w-md">
         Mulai bicara dalam bahasa Jepang untuk memulai percakapan.
         <br />
         <span className="text-slate-300">(Press the mic, speak Japanese — the AI will reply in Japanese + Indonesian.)</span>
@@ -53,7 +53,7 @@ export default function ChatHistory({ messages, lastTranslation, audioForLastRep
   }
 
   return (
-    <div className="flex w-full max-w-md flex-col gap-3">
+    <div className="flex w-full max-w-sm flex-col gap-3 md:max-w-md">
       <AnimatePresence initial={false}>
         {messages.map((m, i) => {
           const isUser = m.role === "user";

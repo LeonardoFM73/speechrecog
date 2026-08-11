@@ -14,6 +14,7 @@ export interface UseSession {
   end: () => Promise<void>;
   updateMeta: (patch: Partial<SessionDoc>) => Promise<void>;
   appendTurn: (turn: SessionTurn) => Promise<void>;
+  settings: { ttsSpeed: number; jpLevel: string; maxTurns: number };
 }
 
 function uuidv4(): string {
@@ -71,6 +72,9 @@ export function useSession(apiBase: string): UseSession {
         scenario_id: "sensei",
         scenario_text: null,
         speaker_id: null,
+        tts_speed: 1.0,
+        jp_level: "intermediate",
+        max_turns: 10,
         messages: [],
       });
       setDbReady(false);
@@ -117,5 +121,9 @@ export function useSession(apiBase: string): UseSession {
     [sessionId],
   );
 
-  return { sessionId, hydrated, ready, dbReady, start, end, updateMeta, appendTurn };
+  const settings = hydrated
+    ? { ttsSpeed: hydrated.tts_speed, jpLevel: hydrated.jp_level, maxTurns: hydrated.max_turns }
+    : { ttsSpeed: 1.0, jpLevel: "intermediate", maxTurns: 10 };
+
+  return { sessionId, hydrated, ready, dbReady, start, end, updateMeta, appendTurn, settings };
 }

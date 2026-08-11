@@ -102,12 +102,17 @@ class TtsService:
         return flat
 
     # ------------------------------------------------------------------
-    async def synthesise(self, text: str, speaker: int) -> bytes:
+    async def synthesise(self, text: str, speaker: int, speed: float | None = None) -> bytes:
         """Two-step synthesis: POST /audio_query → POST /synthesis. Returns WAV bytes.
+
+        Args:
+            text: Japanese text to synthesise.
+            speaker: VOICEVOX style_id.
+            speed: Speed multiplier override; falls back to default if None.
 
         Raises:
             ValueError: empty text.
-            httpx.HTTPError: VOICEVOX returned non-2xx (propagated from httpx).
+            httpx.HTTPError: VOICEVOX returned non-2xx.
         """
         if self._client is None:
             raise RuntimeError("TtsService client not initialised")
@@ -121,7 +126,7 @@ class TtsService:
         )
         q.raise_for_status()
         query = q.json()
-        query["speedScale"] = self._default_speed
+        query["speedScale"] = speed if speed is not None else self._default_speed
 
         # Step 2: synthesise to WAV
         s = await self._client.post(

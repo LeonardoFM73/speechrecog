@@ -22,7 +22,7 @@ export default function SpeakerPicker({ selected, onChange, available, disabled 
   });
 
   return (
-    <div className="mb-4 w-full max-w-md">
+    <div className="mb-4 w-full">
       <label className="mb-1 block text-xs font-medium text-slate-500">
         Suara AI
       </label>

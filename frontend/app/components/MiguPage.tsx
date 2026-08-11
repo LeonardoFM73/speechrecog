@@ -9,6 +9,8 @@ import {
   ChatScenario,
   CUSTOM_SCENARIO_ID,
   DEFAULT_SPEAKERS,
+  JP_LEVEL_LABELS,
+  JP_LEVELS,
   PRESET_SCENARIOS,
   Speaker,
   TranscriptionStatus,
@@ -29,6 +31,11 @@ export default function MiguPage() {
   const [mode, setMode] = useState<AppMode>("transcribe");
   const [scenario, setScenario] = useState<ChatScenario>(PRESET_SCENARIOS[0]);
   const [customScenario, setCustomScenario] = useState<string>("");
+
+  // Settings state
+  const [ttsSpeed, setTtsSpeed] = useState<number>(1.0);
+  const [jpLevel, setJpLevel] = useState<"basic" | "intermediate" | "hard">("intermediate");
+  const [maxTurns, setMaxTurns] = useState<number>(10);
 
   // TTS state
   const [speakers, setSpeakers] = useState<Speaker[]>([]);
@@ -180,6 +187,9 @@ export default function MiguPage() {
         ?? speakers.find((s) => s.id === doc.speaker_id);
       if (found) setSelectedSpeaker(found);
     }
+    if (doc.tts_speed != null) setTtsSpeed(doc.tts_speed);
+    if (doc.jp_level) setJpLevel(doc.jp_level);
+    if (doc.max_turns != null) setMaxTurns(doc.max_turns);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.hydrated?.session_id, speakers]);
 
@@ -191,14 +201,20 @@ export default function MiguPage() {
       scenario_id: string;
       scenario_text: string | null;
       speaker_id: number | null;
+      tts_speed: number;
+      jp_level: "basic" | "intermediate" | "hard";
+      max_turns: number;
     }> = {
       mode,
       scenario_id: scenario.id,
       scenario_text: scenario.id === CUSTOM_SCENARIO_ID ? scenario.description : null,
       speaker_id: selectedSpeaker.id,
+      tts_speed: ttsSpeed,
+      jp_level: jpLevel,
+      max_turns: maxTurns,
     };
     void session.updateMeta(patch);
-  }, [session.sessionId, mode, scenario.id, scenario.description, selectedSpeaker.id, session]);
+  }, [session.sessionId, mode, scenario.id, scenario.description, selectedSpeaker.id, ttsSpeed, jpLevel, maxTurns, session]);
 
   // Cleanup blob URLs
   useEffect(() => {
@@ -287,7 +303,7 @@ export default function MiguPage() {
       if (ttsReady && uploadResult.text) {
         try {
           const audioBlob = await ttsClient.synthesise(
-            { text: uploadResult.text, speaker: selectedSpeaker.id },
+            { text: uploadResult.text, speaker: selectedSpeaker.id, speed: ttsSpeed },
             API_BASE,
           );
           if (lastBlobUrlRef.current) URL.revokeObjectURL(lastBlobUrlRef.current);
@@ -344,6 +360,8 @@ export default function MiguPage() {
           user_text: uploadResult.text,
           scenario: effectiveScenario,
           history,
+          jp_level: jpLevel as "basic" | "intermediate" | "hard",
+          max_turns: maxTurns,
         },
         API_BASE,
       );
@@ -363,7 +381,7 @@ export default function MiguPage() {
       migu.speak();
       try {
         const audioBlob = await ttsClient.synthesise(
-          { text: chatRes.reply_jp, speaker: selectedSpeaker.id },
+          { text: chatRes.reply_jp, speaker: selectedSpeaker.id, speed: ttsSpeed },
           API_BASE,
         );
         if (lastBlobUrlRef.current) URL.revokeObjectURL(lastBlobUrlRef.current);
@@ -453,7 +471,7 @@ export default function MiguPage() {
       )}
       <RoomBackground />
 
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-md flex-col items-center px-4 pb-32 pt-6">
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-md flex-col items-center px-4 pb-safe pt-safe md:max-w-2xl md:px-6 md:pb-40">
         {/* Top bar */}
         <div className="flex w-full items-center justify-between">
           <div className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm backdrop-blur">
@@ -540,6 +558,79 @@ export default function MiguPage() {
                     />
                   </div>
                 )}
+
+                {/* General settings */}
+                <div className="border-t border-slate-200 pt-3 space-y-3">
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                    Pengaturan Umum
+                  </div>
+
+                  {/* Speed */}
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-500">
+                      Kecepatan Suara — {ttsSpeed.toFixed(1)}x
+                    </label>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={2}
+                      step={0.1}
+                      value={ttsSpeed}
+                      onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
+                      className="w-full accent-amber-500"
+                    />
+                    <div className="flex justify-between text-[10px] text-slate-400">
+                      <span>0.5x</span>
+                      <span>2.0x</span>
+                    </div>
+                  </div>
+
+                  {/* JP Level */}
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-500">
+                      Tingkat Bahasa Jepang
+                    </label>
+                    <div className="flex gap-1">
+                      {JP_LEVELS.map((lvl) => (
+                        <button
+                          key={lvl}
+                          type="button"
+                          onClick={() => setJpLevel(lvl)}
+                          className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
+                            jpLevel === lvl
+                              ? "border-amber-500 bg-amber-500 text-white shadow"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                          }`}
+                        >
+                          {JP_LEVEL_LABELS[lvl]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Max Turns */}
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-500">
+                      Batas Percakapan — {maxTurns} turn
+                    </label>
+                    <input
+                      type="range"
+                      min={2}
+                      max={50}
+                      step={1}
+                      value={maxTurns}
+                      onChange={(e) => setMaxTurns(parseInt(e.target.value))}
+                      className="w-full accent-rose-500"
+                    />
+                    <div className="flex justify-between text-[10px] text-slate-400">
+                      <span>2</span>
+                      <span>50</span>
+                    </div>
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      AI akan mengakhiri percakapan secara natural saat mendekati batas.
+                    </p>
+                  </div>
+                </div>
 
                 {!chatReady && mode === "roleplay" && (
                   <div className="mt-3 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">

@@ -1,6 +1,6 @@
 /** API client for the transcription + chat + TTS + sessions backend. */
 
-import { ChatMessage, Speaker, TranscriptionResult, TtsRequest } from "@/types/audio";
+import { ChatMessage, JpLevel, Speaker, TranscriptionResult, TtsRequest } from "@/types/audio";
 
 export class ApiError extends Error {
   constructor(
@@ -92,6 +92,8 @@ export interface ChatRequest {
   user_text: string;
   scenario: string;
   history: ChatMessage[];
+  jp_level?: JpLevel;
+  max_turns?: number;
 }
 
 export interface ChatResponse {
@@ -152,7 +154,7 @@ export async function fetchSpeakers(baseUrl: string): Promise<Speaker[]> {
  * Returns a Blob (audio/wav) that the caller should turn into a blob: URL.
  */
 export async function synthesiseSpeech(
-  payload: TtsRequest,
+  payload: TtsRequest & { speed?: number },
   baseUrl: string,
 ): Promise<Blob> {
   const response = await fetch(`${baseUrl}/tts`, {
@@ -207,6 +209,9 @@ export interface SessionDoc {
   scenario_id: string;
   scenario_text: string | null;
   speaker_id: number | null;
+  tts_speed: number;
+  jp_level: JpLevel;
+  max_turns: number;
   messages: SessionTurn[];
   user_metadata?: Record<string, unknown>;
 }
