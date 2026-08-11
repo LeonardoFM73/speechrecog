@@ -2,7 +2,7 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { SessionProvider } from "@/components/SessionProvider";
-import { AuthProvider } from "@/context/AuthContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import LoginPage from "@/components/LoginPage";
 import { authClient } from "@/services/api";
 
@@ -11,44 +11,35 @@ const TOKEN_KEY = "speechrecog.auth_token";
 const USERNAME_KEY = "speechrecog.username";
 
 export default function SessionRoot({ children, apiBase }: { children: ReactNode; apiBase: string }) {
-  const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  return (
+    <AuthProvider apiBase={apiBase}>
+      <AuthGate apiBase={apiBase}>{children}</AuthGate>
+    </AuthProvider>
+  );
+}
+
+function AuthGate({ children, apiBase }: { children: ReactNode; apiBase: string }) {
+  const { token, loaded } = useAuth();
+  const [validated, setValidated] = useState(false);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem(TOKEN_KEY);
-    const storedUser = localStorage.getItem(USERNAME_KEY);
-    if (!storedToken || !storedUser) {
-      setLoggedIn(false);
+    if (!token || !loaded) {
+      setValidated(false);
       return;
     }
     authClient
-      .me(apiBase, storedToken)
-      .then(() => {
-        setToken(storedToken);
-        setLoggedIn(true);
-      })
+      .me(apiBase, token)
+      .then(() => setValidated(true))
       .catch(() => {
         localStorage.removeItem(TOKEN_KEY);
         localStorage.removeItem(USERNAME_KEY);
-        setLoggedIn(false);
+        window.location.reload();
       });
-  }, [apiBase]);
+  }, [apiBase, token, loaded]);
 
-  if (loggedIn === null) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-sky-300 via-sky-100 to-amber-50">
-        <p className="text-sm text-slate-500">Memuat...</p>
-      </div>
-    );
-  }
-
-  if (!loggedIn) {
+  if (!token || !validated) {
     return <LoginPage />;
   }
 
-  return (
-    <AuthProvider apiBase={apiBase}>
-      <SessionProvider apiBase={apiBase}>{children}</SessionProvider>
-    </AuthProvider>
-  );
+  return <SessionProvider apiBase={apiBase}>{children}</SessionProvider>;
 }
