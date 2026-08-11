@@ -1,8 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { Pencil } from "lucide-react";
-import Avatar, { AvatarState } from "./Avatar";
+import AvatarStatic from "./AvatarStatic";
 
 interface Props {
   scenario: { id: string; label: string; description: string };
@@ -10,10 +9,8 @@ interface Props {
   onSelect: () => void;
   customValue?: string;
   onCustomChange?: (v: string) => void;
-  state?: AvatarState;
 }
 
-// Map scenario IDs to avatar keys
 const SCENARIO_AVATAR_MAP: Record<string, string> = {
   taxi_station: "untenshu",
   convenience_store: "kanriin",
@@ -22,18 +19,15 @@ const SCENARIO_AVATAR_MAP: Record<string, string> = {
   doctor: "isha",
 };
 
-export default function ScenarioCard({ scenario, selected, onSelect, customValue, onCustomChange, state = "idle" }: Props) {
+export default function ScenarioCard({ scenario, selected, onSelect, customValue, onCustomChange }: Props) {
   const isCustom = scenario.id === "custom";
   const avatarKey = SCENARIO_AVATAR_MAP[scenario.id] ?? "custom";
   return (
-    <motion.button
+    <button
       type="button"
       onClick={onSelect}
-      layout
-      whileHover={{ y: -4 }}
-      whileTap={{ scale: 0.97 }}
-      className={`group flex w-full flex-col items-center gap-2 rounded-2xl border bg-white p-4 text-center shadow-card transition-shadow ${
-        selected ? "border-blue-500 shadow-glow" : "border-slate-200 hover:border-slate-300"
+      className={`group flex w-full flex-col items-center gap-2 rounded-2xl border bg-white p-4 text-center shadow-card transition-all duration-150 ${
+        selected ? "border-blue-500 shadow-glow" : "border-slate-200 hover:border-slate-300 hover:shadow-lg"
       }`}
     >
       {isCustom ? (
@@ -41,7 +35,7 @@ export default function ScenarioCard({ scenario, selected, onSelect, customValue
           <Pencil className="h-8 w-8 text-slate-500" />
         </div>
       ) : (
-        <Avatar scenarioId={avatarKey} state={state} size="sm" />
+        <AvatarStatic scenarioId={avatarKey} size={80} />
       )}
       <div className="text-sm font-semibold text-slate-900">{scenario.label}</div>
       <div className="text-xs text-slate-500 line-clamp-2">{scenario.description}</div>
@@ -55,6 +49,6 @@ export default function ScenarioCard({ scenario, selected, onSelect, customValue
           className="mt-2 w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
         />
       )}
-    </motion.button>
+    </button>
   );
 }

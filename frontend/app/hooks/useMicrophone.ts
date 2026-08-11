@@ -14,11 +14,6 @@ interface UseMicrophoneReturn {
   mediaDevicesSupported: boolean;
 }
 
-// Module-level state for recording (survives re-renders, cleared on stop)
-let mediaRecorderInstance: MediaRecorder | null = null;
-let chunks: Blob[] = [];
-let timerInterval: ReturnType<typeof setInterval> | null = null;
-
 export function useMicrophone(): UseMicrophoneReturn {
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [duration, setDuration] = useState<number>(0);
@@ -30,6 +25,9 @@ export function useMicrophone(): UseMicrophoneReturn {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const levelRafRef = useRef<number | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Check if mediaDevices is available
   useEffect(() => {
@@ -41,12 +39,12 @@ export function useMicrophone(): UseMicrophoneReturn {
   }, []);
 
   const resetTimer = useCallback(() => {
-    if (timerInterval) {
-      clearInterval(timerInterval);
-      timerInterval = null;
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
     setDuration(0);
-    timerInterval = setInterval(() => {
+    timerRef.current = setInterval(() => {
       setDuration((prev) => prev + 1);
     }, 1000);
   }, []);
@@ -111,12 +109,12 @@ export function useMicrophone(): UseMicrophoneReturn {
         : "audio/webm";
 
       const recorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderInstance = recorder;
-      chunks = [];
+      recorderRef.current = recorder;
+      chunksRef.current = [];
 
       recorder.ondataavailable = (event: BlobEvent) => {
         if (event.data.size > 0) {
-          chunks.push(event.data);
+          chunksRef.current.push(event.data);
         }
       };
 
@@ -144,49 +142,50 @@ export function useMicrophone(): UseMicrophoneReturn {
 
   const stopRecording = useCallback(async (): Promise<Blob> => {
     return new Promise<Blob>((resolve, reject) => {
-      if (!mediaRecorderInstance || !mediaRecorderInstance.stream) {
+      const recorder = recorderRef.current;
+      if (!recorder || !recorder.stream) {
         reject(new Error("No active recording"));
         return;
       }
 
-      if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
       }
 
-      mediaRecorderInstance.onstop = () => {
-        const blob = new Blob(chunks, { type: mediaRecorderInstance?.mimeType ?? "audio/webm" });
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType ?? "audio/webm" });
 
-        mediaRecorderInstance!.stream.getTracks().forEach((track) => track.stop());
-        mediaRecorderInstance = null;
-        chunks = [];
+        recorder.stream.getTracks().forEach((track) => track.stop());
+        recorderRef.current = null;
+        chunksRef.current = [];
         setIsRecording(false);
         stopLevelMeter();
 
         resolve(blob);
       };
 
-      mediaRecorderInstance.onerror = () => {
-        if (mediaRecorderInstance?.stream) {
-          mediaRecorderInstance.stream.getTracks().forEach((track) => track.stop());
-          mediaRecorderInstance = null;
-          chunks = [];
+      recorder.onerror = () => {
+        if (recorder?.stream) {
+          recorder.stream.getTracks().forEach((track) => track.stop());
+          recorderRef.current = null;
+          chunksRef.current = [];
           setIsRecording(false);
           stopLevelMeter();
         }
         reject(new Error("Recording error occurred"));
       };
 
-      mediaRecorderInstance.stop();
+      recorder.stop();
     });
   }, [stopLevelMeter]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (timerInterval) clearInterval(timerInterval);
-      if (mediaRecorderInstance?.stream) {
-        mediaRecorderInstance.stream.getTracks().forEach((track) => track.stop());
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (recorderRef.current?.stream) {
+        recorderRef.current.stream.getTracks().forEach((track) => track.stop());
       }
       stopLevelMeter();
     };

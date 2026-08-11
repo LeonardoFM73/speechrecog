@@ -70,10 +70,9 @@ export default function Avatar({
             />
           ))}
       </AnimatePresence>
-      <motion.div
+      <div
         className="relative"
-        animate={state === "idle" ? { scale: [1, 1.02, 1] } : { scale: 1 }}
-        transition={state === "idle" ? { duration: 4, repeat: Infinity, ease: "easeInOut" } : { duration: 0.2 }}
+        style={{ animation: state === "idle" ? "avatar-breathe 4s ease-in-out infinite" : "none" }}
       >
         <Component size={px} />
         {state === "speaking" && (
@@ -97,7 +96,7 @@ export default function Avatar({
             style={{ width: px, height: px }}
           />
         )}
-      </motion.div>
+      </div>
     </div>
   );
 }

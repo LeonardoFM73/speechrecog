@@ -1,16 +1,14 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Settings, X, ChevronUp, Mic, MicOff, Volume2 } from "lucide-react";
+import { motion } from "framer-motion";
+import { Settings, X, Mic, MicOff } from "lucide-react";
 import {
   AppMode,
   ChatMessage,
   ChatScenario,
   CUSTOM_SCENARIO_ID,
   DEFAULT_SPEAKERS,
-  JP_LEVEL_LABELS,
-  JP_LEVELS,
   PRESET_SCENARIOS,
   Speaker,
   TranscriptionStatus,
@@ -18,8 +16,9 @@ import {
 import { chatClient, SessionTurn, transcriptionClient, ttsClient } from "@/services/api";
 import TalkingMigu, { MiguEmotion } from "@/components/TalkingMigu";
 import RoomBackground from "@/components/RoomBackground";
-import ScenarioPicker from "@/components/ScenarioPicker";
-import SpeakerPicker from "@/components/SpeakerPicker";
+import SettingsDrawer from "@/components/SettingsDrawer";
+import HistoryDrawer from "@/components/HistoryDrawer";
+import MicStage from "@/components/MicStage";
 import { useMicrophone } from "@/hooks/useMicrophone";
 import { useMiguReactions } from "@/hooks/useMiguReactions";
 import { useSessionContext } from "@/components/SessionProvider";
@@ -61,16 +60,12 @@ export default function MiguPage() {
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [historyOpen, setHistoryOpen] = useState<boolean>(false);
 
-  // Debug panel
-  const [debugOpen, setDebugOpen] = useState(false);
-
   const session = useSessionContext();
   const migu = useMiguReactions();
   const audioLevelRef = useRef<number>(0);
 
   const {
     isRecording,
-    duration,
     startRecording,
     stopRecording,
     hasPermission,
@@ -125,33 +120,23 @@ export default function MiguPage() {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      console.log("[DEBUG] fetch speakers dari", API_BASE + "/speakers");
       try {
         const list = await ttsClient.listSpeakers(API_BASE);
-        console.log("[DEBUG] speakers loaded:", list.length, list.map(s => `${s.id}|${s.label}`));
         if (cancelled) return;
         setSpeakers(list);
-        // Try to keep the selected speaker consistent — find match by name+style
         const prevLabel = selectedSpeaker.label;
         const match = list.find(
           (s) => s.label === prevLabel || `${s.name} — ${s.style}` === prevLabel
         );
-        console.log("[DEBUG] match speaker by label:", prevLabel, "→", match?.id ?? "tidak ada");
         if (match) {
-          console.log("[DEBUG] selectedSpeaker di-set:", match.label);
           setSelectedSpeaker(match);
-        } else {
-          console.warn("[DEBUG] Tidak match speaker dari VOICEVOX, menggunakan", selectedSpeaker.label);
         }
-      } catch (e) {
-        console.error("[DEBUG] GAGAL fetch speakers:", e);
+      } catch {
         if (!cancelled) setSpeakers([]);
       }
     };
     void load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -162,7 +147,7 @@ export default function MiguPage() {
     if (doc.messages.length === 0) return;
     setHistory(
       doc.messages
-        .filter((m) => m.ai_reply_jp) // only roleplay turns
+        .filter((m) => m.ai_reply_jp)
         .map((m): ChatMessage => ({
           role: m.user_text ? "user" : "model",
           text: m.user_text || m.ai_reply_jp || "",
@@ -290,13 +275,12 @@ export default function MiguPage() {
     setTranscribedText(uploadResult.text);
     setResultDuration(uploadResult.duration ?? 0);
     setLanguage(uploadResult.language ?? "");
-    migu.showSpeech(transcribedText, 4000);
+    migu.showSpeech(uploadResult.text, 4000);
 
     if (!session.sessionId) {
       await session.start();
     }
 
-    // Transcribe-only mode: Migu repeats text via TTS if available
     if (mode === "transcribe") {
       setStatus("speaking");
       migu.speak();
@@ -336,7 +320,7 @@ export default function MiguPage() {
 
     // Roleplay mode
     if (!chatReady) {
-      setError("Chat service is not ready. Set GEMINI_API_KEY on the backend.");
+      setError("Chat service is not ready. Set OPENAI_BASE_URL on the backend.");
       setStatus("error");
       migu.reset();
       return;
@@ -424,7 +408,6 @@ export default function MiguPage() {
     playBlob,
   ]);
 
-  // Map app status to Migu emotion (only when not actively reacting)
   const effectiveEmotion: MiguEmotion = (() => {
     if (status === "recording") return "listening";
     if (status === "speaking") return "talking";
@@ -433,10 +416,8 @@ export default function MiguPage() {
   })();
 
   const effectiveSpeech = migu.speechText || transcribedText;
-
   const denied = hasPermission === false;
 
-  // Migu tap handlers
   const onMiguHead = useCallback(() => migu.handleTapHead(), [migu]);
   const onMiguBelly = useCallback(() => migu.handleTapBelly(), [migu]);
   const onMiguBeak = useCallback(() => migu.handleTapBeak(), [migu]);
@@ -445,37 +426,13 @@ export default function MiguPage() {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-sky-300 via-sky-100 to-amber-50">
-      {/* Debug toggle */}
-      <button
-        type="button"
-        onClick={() => setDebugOpen(prev => !prev)}
-        className="fixed top-2 right-2 z-50 rounded bg-black/70 px-2 py-1 text-[10px] font-mono text-white backdrop-blur hover:bg-black/90"
-      >
-        {debugOpen ? "❌ DEBUG" : "🐛 DEBUG"}
-      </button>
-      {debugOpen && (
-        <div className="fixed top-10 right-2 z-50 w-80 rounded-lg border border-slate-200 bg-black/80 p-3 text-[11px] font-mono leading-relaxed text-green-400 shadow-lg backdrop-blur">
-          <div className="mb-2 font-bold text-white">DIAGNOSTIC PANEL</div>
-          <div>API_BASE: {API_BASE}</div>
-          <div>speakers loaded: {speakers.length}</div>
-          <div>selectedSpeaker: {selectedSpeaker.id} | {selectedSpeaker.label}</div>
-          <div>ttsReady: {ttsReady ? "✅" : "❌"}</div>
-          <div>chatReady: {chatReady ? "✅" : "❌"}</div>
-          <div>session: {session.sessionId ?? "(null)"}</div>
-          <div>hydrated: {session.hydrated?.session_id ?? "(null)"}</div>
-          <div className="mt-2 border-t border-slate-700 pt-2 text-yellow-300">
-            Open browser Console (F12) to see [DEBUG] logs.
-            {'\n'}Click "Suara AI" to trigger onChange debug.
-          </div>
-        </div>
-      )}
       <RoomBackground />
 
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-md flex-col items-center px-4 pb-safe pt-safe md:max-w-2xl md:px-6 md:pb-40">
         {/* Top bar */}
         <div className="flex w-full items-center justify-between">
           <div className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm backdrop-blur">
-            🐦 Migu - 日本語
+            Migu - 日本語
           </div>
           <button
             type="button"
@@ -498,154 +455,36 @@ export default function MiguPage() {
         </div>
 
         {/* Settings drawer */}
-        <AnimatePresence>
-          {settingsOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: -10, height: 0 }}
-              animate={{ opacity: 1, y: 0, height: "auto" }}
-              exit={{ opacity: 0, y: -10, height: 0 }}
-              transition={{ duration: 0.25 }}
-              className="mt-3 w-full overflow-hidden"
-            >
-              <div className="rounded-2xl border border-amber-200 bg-white/90 p-4 shadow-lg backdrop-blur">
-                <div className="mb-3 inline-flex rounded-full border border-slate-200 bg-slate-100 p-1 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setMode("transcribe")}
-                    className={`rounded-full px-3 py-1 font-medium transition ${
-                      mode === "transcribe"
-                        ? "bg-amber-500 text-white shadow"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    🎙️ Ulangi
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode("roleplay")}
-                    className={`rounded-full px-3 py-1 font-medium transition ${
-                      mode === "roleplay"
-                        ? "bg-rose-500 text-white shadow"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    💬 Roleplay
-                  </button>
-                </div>
-
-                {mode === "roleplay" && (
-                  <div className="space-y-3">
-                    <ScenarioPicker
-                      selected={scenario}
-                      onChange={(s) =>
-                        setScenario({
-                          ...s,
-                          description: s.id === CUSTOM_SCENARIO_ID ? customScenario : s.description,
-                        })
-                      }
-                      customText={customScenario}
-                      onCustomTextChange={(t) => {
-                        setCustomScenario(t);
-                        if (scenario.id === CUSTOM_SCENARIO_ID) {
-                          setScenario((prev) => ({ ...prev, description: t }));
-                        }
-                      }}
-                    />
-                    <SpeakerPicker
-                      selected={selectedSpeaker}
-                      onChange={setSelectedSpeaker}
-                      available={speakers}
-                    />
-                  </div>
-                )}
-
-                {/* General settings */}
-                <div className="border-t border-slate-200 pt-3 space-y-3">
-                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    Pengaturan Umum
-                  </div>
-
-                  {/* Speed */}
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-500">
-                      Kecepatan Suara — {ttsSpeed.toFixed(1)}x
-                    </label>
-                    <input
-                      type="range"
-                      min={0.5}
-                      max={2}
-                      step={0.1}
-                      value={ttsSpeed}
-                      onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
-                      className="w-full accent-amber-500"
-                    />
-                    <div className="flex justify-between text-[10px] text-slate-400">
-                      <span>0.5x</span>
-                      <span>2.0x</span>
-                    </div>
-                  </div>
-
-                  {/* JP Level */}
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-500">
-                      Tingkat Bahasa Jepang
-                    </label>
-                    <div className="flex gap-1">
-                      {JP_LEVELS.map((lvl) => (
-                        <button
-                          key={lvl}
-                          type="button"
-                          onClick={() => setJpLevel(lvl)}
-                          className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
-                            jpLevel === lvl
-                              ? "border-amber-500 bg-amber-500 text-white shadow"
-                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                          }`}
-                        >
-                          {JP_LEVEL_LABELS[lvl]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Max Turns */}
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-500">
-                      Batas Percakapan — {maxTurns} turn
-                    </label>
-                    <input
-                      type="range"
-                      min={2}
-                      max={50}
-                      step={1}
-                      value={maxTurns}
-                      onChange={(e) => setMaxTurns(parseInt(e.target.value))}
-                      className="w-full accent-rose-500"
-                    />
-                    <div className="flex justify-between text-[10px] text-slate-400">
-                      <span>2</span>
-                      <span>50</span>
-                    </div>
-                    <p className="mt-1 text-[10px] text-slate-400">
-                      AI akan mengakhiri percakapan secara natural saat mendekati batas.
-                    </p>
-                  </div>
-                </div>
-
-                {!chatReady && mode === "roleplay" && (
-                  <div className="mt-3 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
-                    ⚠️ Chat service belum siap — set <code>GEMINI_API_KEY</code> di backend.
-                  </div>
-                )}
-                {!ttsReady && (
-                  <div className="mt-3 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-                    🔇 VOICEVOX belum siap — balasan tanpa audio.
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <SettingsDrawer
+          open={settingsOpen}
+          mode={mode}
+          scenario={scenario}
+          customScenario={customScenario}
+          speakers={speakers}
+          selectedSpeaker={selectedSpeaker}
+          ttsSpeed={ttsSpeed}
+          jpLevel={jpLevel}
+          maxTurns={maxTurns}
+          chatReady={chatReady}
+          ttsReady={ttsReady}
+          onModeChange={setMode}
+          onScenarioChange={(s) =>
+            setScenario({
+              ...s,
+              description: s.id === CUSTOM_SCENARIO_ID ? customScenario : s.description,
+            })
+          }
+          onCustomScenarioChange={(t) => {
+            setCustomScenario(t);
+            if (scenario.id === CUSTOM_SCENARIO_ID) {
+              setScenario((prev) => ({ ...prev, description: t }));
+            }
+          }}
+          onSpeakerChange={setSelectedSpeaker}
+          onTtsSpeedChange={setTtsSpeed}
+          onJpLevelChange={setJpLevel}
+          onMaxTurnsChange={setMaxTurns}
+        />
 
         {/* Migu stage */}
         <div className="mt-6 flex w-full flex-1 flex-col items-center justify-center">
@@ -661,40 +500,19 @@ export default function MiguPage() {
             onTapFoot={onMiguFoot}
           />
 
-          {/* Status line under the character */}
-          <div className="mt-4 flex min-h-[24px] items-center gap-2 text-sm font-medium text-slate-700">
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={status}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-                transition={{ duration: 0.18 }}
-                className="rounded-full bg-white/70 px-3 py-1 backdrop-blur"
-              >
-                {status === "idle" && "Sentuh mic untuk bicara 👇"}
-                {status === "recording" && "🎙️ Mendengarkan..."}
-                {status === "uploading" && "📤 Mengirim..."}
-                {status === "transcribing" && "🧠 Menerjemahkan..."}
-                {status === "chatting" && "💭 Migu berpikir..."}
-                {status === "speaking" && "🗣️ Migu bicara..."}
-                {status === "complete" && "✅ Selesai!"}
-                {status === "error" && "❌ Gagal"}
-              </motion.span>
-            </AnimatePresence>
-            {replyAudioUrl && status === "complete" && (
-              <button
-                type="button"
-                onClick={() => playBlob(replyAudioUrl)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-white shadow transition hover:bg-amber-600"
-                aria-label="Replay"
-              >
-                <Volume2 className="h-4 w-4" />
-              </button>
-            )}
-          </div>
+          {/* Status + error + result + history toggle */}
+          <MicStage
+            status={status}
+            error={error}
+            transcribedText={transcribedText}
+            replyAudioUrl={replyAudioUrl}
+            mode={mode}
+            historyOpen={historyOpen}
+            onReplay={() => replyAudioUrl && playBlob(replyAudioUrl)}
+            onToggleHistory={() => setHistoryOpen((v) => !v)}
+          />
 
-          {/* Error */}
+          {/* Error notification */}
           {error && (
             <div className="mt-3 w-full max-w-sm rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
               {error}
@@ -719,7 +537,6 @@ export default function MiguPage() {
               className="mt-3 flex items-center gap-1 text-xs font-medium text-slate-600 underline-offset-2 hover:underline"
             >
               {historyOpen ? "Sembunyikan" : "Lihat"} riwayat ({history.length})
-              <ChevronUp className={`h-3 w-3 transition ${historyOpen ? "" : "rotate-180"}`} />
             </button>
           )}
         </div>
@@ -769,7 +586,7 @@ export default function MiguPage() {
       {/* Mic permission error notification */}
       {(permissionError || !mediaDevicesSupported) && (
         <div className="mx-auto mt-4 w-full max-w-sm animate-pulse rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-center">
-          <p className="text-sm font-semibold text-red-700">⚠️ Mikrofon tidak bisa digunakan</p>
+          <p className="text-sm font-semibold text-red-700">Mikrofon tidak bisa digunakan</p>
           <p className="mt-1 text-xs text-red-600">
             {permissionError ??
               "Browser Anda tidak mendukung akses mikrofon. Pastikan kamu membuka halaman ini melalui HTTPS atau localhost."}
@@ -778,65 +595,11 @@ export default function MiguPage() {
       )}
 
       {/* History drawer */}
-      <AnimatePresence>
-        {historyOpen && mode === "roleplay" && history.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
-            onClick={() => setHistoryOpen(false)}
-          >
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", stiffness: 260, damping: 30 }}
-              className="relative mx-auto mt-16 flex h-[80vh] max-w-md flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Close button */}
-              <div className="flex items-center justify-between px-4 pt-4">
-                <h2 className="text-lg font-bold text-slate-800">Riwayat Percakapan</h2>
-                <button
-                  type="button"
-                  onClick={() => setHistoryOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
-                  aria-label="Close history"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* Draggable handle */}
-              <div className="mx-auto mb-2 h-1.5 w-10 rounded-full bg-slate-300" />
-
-              {/* Messages list */}
-              <div className="flex-1 space-y-2 overflow-y-auto px-4 pb-8">
-                {history.map((m, i) => (
-                  <div
-                    key={i}
-                    className={`rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                      m.role === "user"
-                        ? "ml-auto max-w-[80%] bg-amber-100 text-slate-800"
-                        : "mr-auto max-w-[80%] bg-rose-100 text-slate-800"
-                    }`}
-                  >
-                    <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                      {m.role === "user" ? "Kamu" : "Migu"}
-                    </div>
-                    <div className="mt-0.5">{m.text}</div>
-                    {m.translation && (
-                      <div className="mt-1 text-xs italic text-slate-600">{m.translation}</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <HistoryDrawer
+        open={historyOpen && mode === "roleplay" && history.length > 0}
+        history={history}
+        onClose={() => setHistoryOpen(false)}
+      />
     </div>
   );
 }

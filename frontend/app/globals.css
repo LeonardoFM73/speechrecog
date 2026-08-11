@@ -87,6 +87,11 @@ body {
   50% { transform: scaleY(1.5); }
 }
 
+@keyframes avatar-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
 /* ── Safe-area utilities ── */
 .pb-safe {
   padding-bottom: calc(1.5rem + var(--safe-area-bottom, 0px));

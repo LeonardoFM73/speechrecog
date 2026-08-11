@@ -12,15 +12,6 @@ interface Props {
 export default function SpeakerPicker({ selected, onChange, available, disabled }: Props) {
   const list = available.length > 0 ? available : DEFAULT_SPEAKERS;
 
-  console.log("[DEBUG SpeakerPicker]", {
-    availableCount: available.length,
-    listCount: list.length,
-    selectedId: selected.id,
-    selectedLabel: selected.label,
-    fallback: available.length === 0,
-    listIds: list.map(s => s.id),
-  });
-
   return (
     <div className="mb-4 w-full">
       <label className="mb-1 block text-xs font-medium text-slate-500">
@@ -30,15 +21,13 @@ export default function SpeakerPicker({ selected, onChange, available, disabled 
         value={selected.id}
         onChange={(e) => {
           const id = Number(e.target.value);
-          console.log("[DEBUG SpeakerPicker onChange] selected id:", id);
           const found = list.find((s) => s.id === id);
-          console.log("[DEBUG SpeakerPicker onChange] found:", found?.label ?? "NOT FOUND");
           if (found) onChange(found);
         }}
         disabled={disabled}
         className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow appearance-none"
         style={{
-          appearance: "auto",
+          appearance: "none",
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
           backgroundRepeat: "no-repeat",
           backgroundPosition: "right 10px center",
