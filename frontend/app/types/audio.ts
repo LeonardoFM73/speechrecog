@@ -14,14 +14,16 @@ export type TranscriptionStatus =
 // Application mode (single-page has two workflows)
 export type AppMode = "transcribe" | "roleplay";
 
-// Japanese proficiency level
-export type JpLevel = "basic" | "intermediate" | "hard";
+// Japanese proficiency level (JLPT)
+export type JpLevel = "n5" | "n4" | "n3" | "n2" | "n1";
 
-export const JP_LEVELS: JpLevel[] = ["basic", "intermediate", "hard"];
+export const JP_LEVELS: JpLevel[] = ["n5", "n4", "n3", "n2", "n1"];
 export const JP_LEVEL_LABELS: Record<JpLevel, string> = {
-  basic: "Basic (N4-N5)",
-  intermediate: "Intermediate (N3)",
-  hard: "Hard (N2-N1)",
+  n5: "N5 (Pemula)",
+  n4: "N4 (Dasar)",
+  n3: "N3 (Menengah)",
+  n2: "N2 (Lanjut)",
+  n1: "N1 (Mahir)",
 };
 
 // Result returned from the backend API

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { AppMode, ChatScenario, JP_LEVEL_LABELS, JP_LEVELS, Speaker } from "@/types/audio";
+import { AppMode, ChatScenario, JP_LEVEL_LABELS, JP_LEVELS, JpLevel, Speaker } from "@/types/audio";
 import ScenarioPicker from "./ScenarioPicker";
 import SpeakerPicker from "./SpeakerPicker";
 
@@ -13,7 +13,7 @@ interface Props {
   speakers: Speaker[];
   selectedSpeaker: Speaker;
   ttsSpeed: number;
-  jpLevel: "basic" | "intermediate" | "hard";
+  jpLevel: JpLevel;
   maxTurns: number;
   chatReady: boolean;
   ttsReady: boolean;
@@ -22,7 +22,7 @@ interface Props {
   onCustomScenarioChange: (t: string) => void;
   onSpeakerChange: (s: Speaker) => void;
   onTtsSpeedChange: (v: number) => void;
-  onJpLevelChange: (v: "basic" | "intermediate" | "hard") => void;
+  onJpLevelChange: (v: JpLevel) => void;
   onMaxTurnsChange: (v: number) => void;
 }
 

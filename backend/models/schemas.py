@@ -62,8 +62,8 @@ class ChatRequest(BaseModel):
         max_length=50,
         description="Prior turns; the current user_text is added by the server",
     )
-    jp_level: Literal["basic", "intermediate", "hard"] = Field(
-        default="intermediate", description="Japanese difficulty level for the LLM"
+    jp_level: Literal["n5", "n4", "n3", "n2", "n1"] = Field(
+        default="n3", description="Japanese difficulty level for the LLM"
     )
     max_turns: int = Field(
         default=10, ge=2, le=100,
@@ -167,8 +167,8 @@ class SessionCreateRequest(BaseModel):
     scenario_text: str | None = Field(default=None, description="Resolved scenario prompt")
     speaker_id: int | None = Field(default=None, description="VOICEVOX style_id at start")
     tts_speed: float = Field(default=1.0, ge=0.5, le=2.0, description="TTS speed multiplier")
-    jp_level: Literal["basic", "intermediate", "hard"] = Field(
-        default="intermediate", description="Japanese difficulty level"
+    jp_level: Literal["n5", "n4", "n3", "n2", "n1"] = Field(
+        default="n3", description="Japanese difficulty level"
     )
     max_turns: int = Field(default=10, ge=2, le=100, description="Max conversation turns before natural end")
     user_metadata: dict | None = Field(default=None, description="Optional client metadata")
@@ -202,7 +202,7 @@ class SessionDoc(BaseModel):
     scenario_text: str | None = None
     speaker_id: int | None = None
     tts_speed: float = 1.0
-    jp_level: Literal["basic", "intermediate", "hard"] = "intermediate"
+    jp_level: Literal["n5", "n4", "n3", "n2", "n1"] = "n3"
     max_turns: int = 10
     messages: list[SessionTurn] = Field(default_factory=list)
     user_metadata: dict | None = None
@@ -216,7 +216,7 @@ class SessionPatchRequest(BaseModel):
     scenario_text: str | None = None
     speaker_id: int | None = None
     tts_speed: float | None = None
-    jp_level: Literal["basic", "intermediate", "hard"] | None = None
+    jp_level: Literal["n5", "n4", "n3", "n2", "n1"] | None = None
     max_turns: int | None = None
     user_metadata: dict | None = None
 

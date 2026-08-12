@@ -21,14 +21,16 @@ logger = logging.getLogger(__name__)
 # System prompt
 # ---------------------------------------------------------------------------
 JP_LEVELS = {
-    "basic": ("N4〜N5 レベル、簡単な単語と文型。", "短い文（5〜10文字程度）を心がけてください"),
-    "intermediate": ("N3 レベル目安、自然な会話。", "1〜3文にしてください"),
-    "hard": ("N2〜N1 レベル、自然で複雑な表現。", "2〜4文、必要に応じて丁寧語や慣用表現も使ってください"),
+    "n5": ("N5レベル、初級の単語と文型。", "短い文（5〜10文字程度）を心がけてください"),
+    "n4": ("N4レベル、基本的な日常会話。", "短い文（10〜15文字程度）でお願いします"),
+    "n3": ("N3レベル目安、自然な会話。", "1〜3文にしてください"),
+    "n2": ("N2レベル、自然で幅広い表現。", "2〜4文、必要に応じて丁寧語も使ってください"),
+    "n1": ("N1レベル、高度で複雑な表現。", "2〜4文、慣用表現や難しい語彙も使って構いません"),
 }
 
 
 def build_system_prompt(scenario: str, history_text: str, jp_level: str, turn_count: int, max_turns: int) -> str:
-    level_info, length_rule = JP_LEVELS.get(jp_level, JP_LEVELS["intermediate"])
+    level_info, length_rule = JP_LEVELS.get(jp_level, JP_LEVELS["n3"])
     closing_hint = ""
     if max_turns and turn_count >= max_turns - 2:
         closing_hint = (
@@ -113,7 +115,7 @@ class ChatService:
         user_text: str,
         scenario: str,
         history: list[dict],
-        jp_level: str = "intermediate",
+        jp_level: str = "n3",
         max_turns: int = 10,
     ) -> dict[str, str]:
         """Send user text + scenario + history to the LLM, return parsed reply.

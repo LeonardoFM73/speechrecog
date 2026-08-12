@@ -9,6 +9,8 @@ import {
   ChatScenario,
   CUSTOM_SCENARIO_ID,
   DEFAULT_SPEAKERS,
+  JP_LEVELS,
+  JpLevel,
   PRESET_SCENARIOS,
   Speaker,
   TranscriptionStatus,
@@ -49,7 +51,7 @@ export default function MiguPage() {
 
   // Settings state
   const [ttsSpeed, setTtsSpeed] = useState<number>(1.0);
-  const [jpLevel, setJpLevel] = useState<"basic" | "intermediate" | "hard">("intermediate");
+  const [jpLevel, setJpLevel] = useState<JpLevel>("n3");
   const [maxTurns, setMaxTurns] = useState<number>(10);
 
   // TTS state
@@ -189,7 +191,7 @@ export default function MiguPage() {
       scenario_text: string | null;
       speaker_id: number | null;
       tts_speed: number;
-      jp_level: "basic" | "intermediate" | "hard";
+      jp_level: JpLevel;
       max_turns: number;
     }> = {
       mode,
@@ -346,7 +348,7 @@ export default function MiguPage() {
           user_text: uploadResult.text,
           scenario: effectiveScenario,
           history,
-          jp_level: jpLevel as "basic" | "intermediate" | "hard",
+          jp_level: jpLevel,
           max_turns: maxTurns,
         },
         API_BASE,

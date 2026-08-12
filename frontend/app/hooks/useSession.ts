@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { JpLevel } from "@/types/audio";
 import { sessionClient, SessionDoc, SessionTurn } from "@/services/api";
 
 const STORAGE_KEY = "speechrecog.session_id";
@@ -14,7 +15,7 @@ export interface UseSession {
   end: () => Promise<void>;
   updateMeta: (patch: Partial<SessionDoc>) => Promise<void>;
   appendTurn: (turn: SessionTurn) => Promise<void>;
-  settings: { ttsSpeed: number; jpLevel: string; maxTurns: number };
+  settings: { ttsSpeed: number; jpLevel: JpLevel; maxTurns: number };
 }
 
 function uuidv4(): string {
@@ -80,7 +81,7 @@ export function useSession(apiBase: string, token: string | null): UseSession {
         scenario_text: null,
         speaker_id: null,
         tts_speed: 1.0,
-        jp_level: "intermediate",
+        jp_level: "n3",
         max_turns: 10,
         messages: [],
       });
@@ -144,8 +145,8 @@ export function useSession(apiBase: string, token: string | null): UseSession {
   );
 
   const settings = hydrated
-    ? { ttsSpeed: hydrated.tts_speed, jpLevel: hydrated.jp_level, maxTurns: hydrated.max_turns }
-    : { ttsSpeed: 1.0, jpLevel: "intermediate", maxTurns: 10 };
+    ? { ttsSpeed: hydrated.tts_speed, jpLevel: hydrated.jp_level as JpLevel, maxTurns: hydrated.max_turns }
+    : { ttsSpeed: 1.0, jpLevel: "n3" as JpLevel, maxTurns: 10 };
 
   return { sessionId, hydrated, ready, dbReady, start, end, updateMeta, appendTurn, settings };
 }
