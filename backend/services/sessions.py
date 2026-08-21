@@ -151,35 +151,59 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 async def create_session(
     payload: SessionCreateRequest, username: str = Depends(current_user)
 ) -> Any:
-    doc = await create_or_get_session(username, payload)
-    return doc
+    try:
+        doc = await create_or_get_session(username, payload)
+        return doc
+    except Exception as exc:
+        logger.exception("create_session failed")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("", response_model=list[SessionDoc])
 async def list_sessions(username: str = Depends(current_user)) -> Any:
-    return await list_user_sessions(username)
+    try:
+        return await list_user_sessions(username)
+    except Exception as exc:
+        logger.exception("list_sessions failed")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.get("/{session_id}", response_model=SessionDoc)
 async def get_one(session_id: str, username: str = Depends(current_user)) -> Any:
-    doc = await get_session_owned(session_id, username)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return doc
+    try:
+        doc = await get_session_owned(session_id, username)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return doc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("get_one failed")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.patch("/{session_id}", response_model=SessionDoc)
 async def patch_one(
     session_id: str, payload: SessionPatchRequest, username: str = Depends(current_user)
 ) -> Any:
-    doc = await patch_session(session_id, username, payload)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return doc
+    try:
+        doc = await patch_session(session_id, username, payload)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return doc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("patch_one failed")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @router.post("/{session_id}/messages", response_model=SessionMessageResponse)
 async def append_one(
     session_id: str, turn: SessionTurn, username: str = Depends(current_user)
 ) -> Any:
-    return await append_message(session_id, username, turn)
+    try:
+        return await append_message(session_id, username, turn)
+    except Exception as exc:
+        logger.exception("append_one failed")
+        raise HTTPException(status_code=500, detail=str(exc))

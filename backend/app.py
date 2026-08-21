@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, File, HTTPException, Header, UploadFile
+from fastapi import FastAPI, File, HTTPException, Header, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from loguru import logger
@@ -155,11 +155,28 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://ai-dev-kaiwa.minori.co.id/", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def universal_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Return JSON with CORS headers for all exceptions."""
+    if isinstance(exc, HTTPException):
+        status_code = exc.status_code
+        detail = exc.detail
+    else:
+        status_code = 500
+        detail = "Internal Server Error"
+    headers = {"Access-Control-Allow-Origin": "*"}
+    return JSONResponse(
+        content={"detail": detail} if not isinstance(exc, HTTPException) else {"detail": detail},
+        status_code=status_code,
+        headers=headers,
+    )
 
 
 # ---------------------------------------------------------------------------
