@@ -438,16 +438,16 @@ export default function MiguPage() {
         isAdmin={role === "admin"}
       />
 
-      <div className="relative z-10 ml-16 mx-auto flex min-h-screen w-full max-w-md flex-col items-center px-4 pb-safe pt-safe md:ml-20 md:max-w-2xl md:px-6 md:pb-40">
+      <div className="relative z-10 ml-16 flex min-h-screen w-full flex-col md:ml-20">
         {/* Top bar */}
-        <div className="flex w-full items-center justify-between">
+        <div className="flex w-full items-center justify-between px-4 pt-4">
           <div className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm backdrop-blur">
             Migu - 日本語
           </div>
         </div>
 
         {/* Title */}
-        <div className="mt-4 text-center">
+        <div className="px-4 text-center">
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-800">
             Bicara dengan Migu
           </h1>
@@ -457,7 +457,8 @@ export default function MiguPage() {
         </div>
 
         {/* Settings drawer */}
-        <SettingsDrawer
+        <div className="px-4 pt-2 w-full max-w-md mx-auto">
+          <SettingsDrawer
           open={settingsOpen}
           mode={mode}
           scenario={scenario}
@@ -487,6 +488,7 @@ export default function MiguPage() {
           onJpLevelChange={setJpLevel}
           onMaxTurnsChange={setMaxTurns}
         />
+        </div>
 
         {/* Migu stage */}
         <div className="mt-6 flex w-full flex-1 flex-col items-center justify-center">
