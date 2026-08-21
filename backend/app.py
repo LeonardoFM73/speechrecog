@@ -20,6 +20,7 @@ from models.schemas import (
     ChatRequest,
     ChatResponse,
     HealthResponse,
+    RoleUpdateRequest,
     SpeakersResponse,
     TranscribeResponse,
     TtsRequest,
@@ -96,6 +97,7 @@ async def lifespan(app: FastAPI):
     # Users — MongoDB is optional.
     try:
         await users_service.ensure_indexes()
+        await users_service.seed_admin_user()
         if await sessions_service.ping():
             logger.info("Users ready (MongoDB at %s)", os.environ.get("MONGODB_URL", "mongodb://mongo:27017"))
         else:
@@ -318,7 +320,9 @@ async def register(payload: UserCreateRequest) -> Any:
     password_hash = users_service.hash_password(payload.password)
     await users_service.create_user(payload.username, password_hash)
     token = auth_service.create_token(payload.username)
-    return {"access_token": token, "token_type": "bearer", "username": payload.username}
+    user_doc = await users_service.get_user(payload.username)
+    role = user_doc.get("role", "user") if user_doc else "user"
+    return {"access_token": token, "token_type": "bearer", "username": payload.username, "role": role}
 
 
 @app.post("/auth/login", response_model=TokenResponse)
@@ -328,18 +332,59 @@ async def login(payload: LoginRequest) -> Any:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not users_service.verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = auth_service.create_token(payload.username)
-    return {"access_token": token, "token_type": "bearer", "username": payload.username}
+    token = auth_service.create_token(user["username"], user.get("role", "user"))
+    return {"access_token": token, "token_type": "bearer", "username": user["username"], "role": user.get("role", "user")}
 
 
 @app.get("/auth/me")
 async def me(authorization: str | None = Header(default=None)) -> Any:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    username = auth_service.decode_token(authorization[len("Bearer "):])
-    if not username:
+    decoded = auth_service.decode_token(authorization[len("Bearer "):])
+    if not decoded:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    return {"username": username}
+    return {"username": decoded["username"], "role": decoded["role"]}
+
+
+@app.post("/admin/users/{username}/role", response_model=TokenResponse)
+async def admin_update_role(
+    username: str,
+    payload: RoleUpdateRequest,
+    authorization: str | None = Header(default=None),
+) -> Any:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    decoded = auth_service.decode_token(authorization[len("Bearer "):])
+    if not decoded:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if decoded["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    existing = await users_service.get_user(username)
+    if not existing:
+        raise HTTPException(status_code=404, detail="User not found")
+    updated = await users_service.update_role(username, payload.role)
+    if not updated:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    new_token = auth_service.create_token(username, payload.role)
+    return {"access_token": new_token, "token_type": "bearer", "username": username, "role": payload.role}
+
+
+@app.get("/admin/users", response_model=list[dict])
+async def admin_list_users(
+    authorization: str | None = Header(default=None),
+) -> Any:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    decoded = auth_service.decode_token(authorization[len("Bearer "):])
+    if not decoded:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if decoded["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    col = users_service._Store.get_collection()
+    users = await col.find({}, {"_id": 0, "password_hash": 0}).to_list(length=None)
+    for u in users:
+        u.setdefault("role", "user")
+    return users
 
 
 # ---------------------------------------------------------------------------

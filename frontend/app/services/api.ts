@@ -191,6 +191,7 @@ export interface TokenResponse {
   access_token: string;
   token_type: string;
   username: string;
+  role: string;
 }
 
 export const authClient = {
@@ -218,7 +219,7 @@ export const authClient = {
     }
     return r.json();
   },
-  async me(baseUrl: string, token: string): Promise<{ username: string }> {
+  async me(baseUrl: string, token: string): Promise<{ username: string; role: string }> {
     const r = await fetch(`${baseUrl}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     });

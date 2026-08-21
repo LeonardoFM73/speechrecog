@@ -25,11 +25,12 @@ import { useMicrophone } from "@/hooks/useMicrophone";
 import { useMiguReactions } from "@/hooks/useMiguReactions";
 import { useSessionContext } from "@/components/SessionProvider";
 import { useAuth } from "@/context/AuthContext";
+import Sidebar from "@/components/Sidebar";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function MiguPage() {
-  const { username, logout } = useAuth();
+  const { role } = useAuth();
   const session = useSessionContext();
   const migu = useMiguReactions();
   const audioLevelRef = useRef<number>(0);
@@ -432,31 +433,16 @@ export default function MiguPage() {
     <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-b from-sky-300 via-sky-100 to-amber-50">
       <RoomBackground />
 
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-md flex-col items-center px-4 pb-safe pt-safe md:max-w-2xl md:px-6 md:pb-40">
+      <Sidebar
+        onOpenSettings={() => setSettingsOpen((v) => !v)}
+        isAdmin={role === "admin"}
+      />
+
+      <div className="relative z-10 ml-16 mx-auto flex min-h-screen w-full max-w-md flex-col items-center px-4 pb-safe pt-safe md:ml-20 md:max-w-2xl md:px-6 md:pb-40">
         {/* Top bar */}
         <div className="flex w-full items-center justify-between">
           <div className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm backdrop-blur">
             Migu - 日本語
-          </div>
-          <div className="flex items-center gap-2">
-            {username && (
-              <span className="text-xs text-slate-500">{username}</span>
-            )}
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm backdrop-blur transition hover:bg-white"
-            >
-              Keluar
-            </button>
-            <button
-              type="button"
-              onClick={() => setSettingsOpen((v) => !v)}
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-slate-700 shadow backdrop-blur transition hover:bg-white"
-              aria-label="Settings"
-            >
-              {settingsOpen ? <X className="h-5 w-5" /> : <Settings className="h-5 w-5" />}
-            </button>
           </div>
         </div>
 

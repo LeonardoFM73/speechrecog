@@ -150,6 +150,13 @@ class TokenResponse(BaseModel):
     access_token: str = Field(description="JWT token")
     token_type: str = Field(default="bearer")
     username: str = Field(description="Authenticated username")
+    role: str = Field(description="User role (user/admin)")
+
+
+class RoleUpdateRequest(BaseModel):
+    """POST /admin/users/{username}/role request body."""
+
+    role: Literal["user", "admin"]
 
 
 class SessionCreateRequest(BaseModel):

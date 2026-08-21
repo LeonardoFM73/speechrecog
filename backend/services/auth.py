@@ -13,19 +13,23 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_DAYS = int(os.environ.get("JWT_EXPIRY_DAYS", "30"))
 
 
-def create_token(username: str) -> str:
+def create_token(username: str, role: str = "user") -> str:
     now = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "sub": username,
+        "role": role,
         "iat": now,
         "exp": now + timedelta(days=JWT_EXPIRY_DAYS),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
-def decode_token(token: str) -> str | None:
+def decode_token(token: str) -> dict[str, str] | None:
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload.get("sub")
+        return {
+            "username": payload.get("sub"),
+            "role": payload.get("role", "user"),
+        }
     except jwt.PyJWTError:
         return None
