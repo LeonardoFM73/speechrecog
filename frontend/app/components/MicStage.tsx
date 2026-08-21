@@ -5,14 +5,14 @@ import { Volume2 } from "lucide-react";
 import { TranscriptionStatus } from "@/types/audio";
 
 const STATUS_LABELS: Record<TranscriptionStatus, string> = {
-  idle: "Sentuh mic untuk bicara 👇",
-  recording: "🎙️ Mendengarkan...",
-  uploading: "📤 Mengirim...",
-  transcribing: "🧠 Menerjemahkan...",
-  chatting: "💭 Migu berpikir...",
-  speaking: "🗣️ Migu bicara...",
-  complete: "✅ Selesai!",
-  error: "❌ Gagal",
+  idle: "Tekan untuk mulai",
+  recording: "Mendengarkan...",
+  uploading: "Mengirim...",
+  transcribing: "Transkripsi...",
+  chatting: "Berpikir...",
+  speaking: "Bicara...",
+  complete: "Selesai!",
+  error: "Gagal",
 };
 
 interface Props {
@@ -37,7 +37,7 @@ export default function MicStage({
   onToggleHistory,
 }: Props) {
   return (
-    <div className="mt-4 flex min-h-[24px] items-center gap-2 text-sm font-medium text-slate-700">
+    <div className="mt-3 flex min-h-[28px] items-center justify-center">
       <AnimatePresence mode="wait">
         <motion.span
           key={status}
@@ -45,7 +45,7 @@ export default function MicStage({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}
           transition={{ duration: 0.18 }}
-          className="rounded-full bg-white/70 px-3 py-1 backdrop-blur"
+          className="rounded-full bg-white/80 px-4 py-1.5 text-xs font-medium text-slate-600 shadow-sm backdrop-blur"
         >
           {STATUS_LABELS[status]}
         </motion.span>
@@ -54,10 +54,10 @@ export default function MicStage({
         <button
           type="button"
           onClick={onReplay}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500 text-white shadow transition hover:bg-amber-600"
+          className="ml-2 flex h-7 w-7 items-center justify-center rounded-full bg-amber-500 text-white shadow transition hover:bg-amber-600"
           aria-label="Replay"
         >
-          <Volume2 className="h-4 w-4" />
+          <Volume2 className="h-3.5 w-3.5" />
         </button>
       )}
     </div>
