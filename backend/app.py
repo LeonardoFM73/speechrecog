@@ -327,13 +327,19 @@ async def register(payload: UserCreateRequest) -> Any:
 
 @app.post("/auth/login", response_model=TokenResponse)
 async def login(payload: LoginRequest) -> Any:
-    user = await users_service.get_user(payload.username)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    if not users_service.verify_password(payload.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = auth_service.create_token(user["username"], user.get("role", "user"))
-    return {"access_token": token, "token_type": "bearer", "username": user["username"], "role": user.get("role", "user")}
+    try:
+        user = await users_service.get_user(payload.username)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        if not users_service.verify_password(payload.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        token = auth_service.create_token(user["username"], user.get("role", "user"))
+        return {"access_token": token, "token_type": "bearer", "username": user["username"], "role": user.get("role", "user")}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("login failed for %s", payload.username)
+        raise HTTPException(status_code=500, detail=f"Login error: {exc}")
 
 
 @app.get("/auth/me")

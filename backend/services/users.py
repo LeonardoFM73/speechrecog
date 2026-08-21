@@ -49,7 +49,7 @@ ROLES = ("user", "admin")
 
 async def get_user(username: str) -> dict | None:
     col = _Store.get_collection()
-    doc = await col.find_one({"username": username}, {"_id": 0, "password_hash": 0})
+    doc = await col.find_one({"username": username}, {"_id": 0})
     if doc:
         doc.setdefault("role", "user")
     return doc
