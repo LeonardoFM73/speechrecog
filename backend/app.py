@@ -200,6 +200,12 @@ async def health() -> Any:
     }
 
 
+@app.get("/debug/test-exception")
+async def debug_test_exception() -> Any:
+    """Test endpoint to verify exception handling."""
+    raise ValueError("test error message")
+
+
 # ---------------------------------------------------------------------------
 # TTS (VOICEVOX) endpoints
 # ---------------------------------------------------------------------------
