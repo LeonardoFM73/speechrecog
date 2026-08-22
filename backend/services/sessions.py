@@ -162,10 +162,12 @@ async def create_session(
 @router.get("", response_model=list[SessionDoc])
 async def list_sessions(username: str = Depends(current_user)) -> Any:
     try:
-        return await list_user_sessions(username)
+        sessions = await list_user_sessions(username)
+        logger.info("list_sessions: found %d sessions for %s", len(sessions), username)
+        return sessions
     except Exception as exc:
-        logger.exception("list_sessions failed")
-        raise HTTPException(status_code=500, detail=str(exc))
+        logger.exception("list_sessions failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"list_sessions: {type(exc).__name__}: {exc}")
 
 
 @router.get("/{session_id}", response_model=SessionDoc)

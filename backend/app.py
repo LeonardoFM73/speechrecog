@@ -168,12 +168,19 @@ async def universal_exception_handler(request: Request, exc: Exception) -> JSONR
     import traceback
     tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
     logger.error("Unhandled exception: %s\n%s", exc, "".join(tb))
+
     if isinstance(exc, HTTPException):
         status_code = exc.status_code
         detail = exc.detail or type(exc).__name__
     else:
+        # Handle Pydantic validation errors
         status_code = 500
-        detail = f"{type(exc).__name__}: {exc}"
+        if hasattr(exc, 'errors'):
+            detail = f"{type(exc).__name__}: {exc.errors()}"
+        else:
+            detail = f"{type(exc).__name__}: {exc}"
+        logger.warning("Response validation failed: %s", exc)
+
     headers = {"Access-Control-Allow-Origin": "*"}
     return JSONResponse(
         content={"detail": detail},
