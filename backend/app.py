@@ -155,7 +155,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ai-dev-kaiwa.minori.co.id/", "http://localhost:3000"],
+    allow_origins=["https://ai-dev-kaiwa.minori.co.id", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -165,15 +165,18 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def universal_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Return JSON with CORS headers for all exceptions."""
+    import traceback
+    tb = traceback.format_exception(type(exc), exc, exc.__traceback__)
+    logger.error("Unhandled exception: %s\n%s", exc, "".join(tb))
     if isinstance(exc, HTTPException):
         status_code = exc.status_code
-        detail = exc.detail
+        detail = exc.detail or type(exc).__name__
     else:
         status_code = 500
-        detail = "Internal Server Error"
+        detail = f"{type(exc).__name__}: {exc}"
     headers = {"Access-Control-Allow-Origin": "*"}
     return JSONResponse(
-        content={"detail": detail} if not isinstance(exc, HTTPException) else {"detail": detail},
+        content={"detail": detail},
         status_code=status_code,
         headers=headers,
     )
