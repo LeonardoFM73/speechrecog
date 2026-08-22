@@ -24,7 +24,8 @@ class _Store:
         if cls.client is None:
             cls.client = AsyncIOMotorClient(MONGODB_URL, serverSelectionTimeoutMS=2000)
             cls.db = cls.client[DB_NAME]
-        assert cls.db is not None
+        if cls.db is None:
+            raise RuntimeError("MongoDB database not initialized")
         return cls.db[COLLECTION_NAME]
 
 

@@ -34,12 +34,15 @@ class _Store:
 
     @classmethod
     def get_collection(cls) -> AsyncIOMotorCollection:
-        if cls.client is None:
-            cls.client = AsyncIOMotorClient(MONGODB_URL, serverSelectionTimeoutMS=2000)
-            cls.db = cls.client[DB_NAME]
-        if cls.db is None:
-            raise RuntimeError("MongoDB database not initialized")
-        return cls.db[COLLECTION_NAME]
+        try:
+            if cls.client is None:
+                cls.client = AsyncIOMotorClient(MONGODB_URL, serverSelectionTimeoutMS=2000)
+            if cls.db is None:
+                cls.db = cls.client[DB_NAME]
+            return cls.db[COLLECTION_NAME]
+        except Exception as exc:
+            logger.error("Failed to get sessions collection: %s", exc)
+            raise RuntimeError(f"MongoDB connection failed: {exc}") from exc
 
 
 async def ensure_indexes() -> None:
