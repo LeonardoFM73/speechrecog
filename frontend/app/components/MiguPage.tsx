@@ -324,6 +324,13 @@ export default function MiguPage() {
     }
 
     // Roleplay mode
+    if (!uploadResult.text || !uploadResult.text.trim()) {
+      setError("Tidak ada teks yang terdeteksi. Coba ucapkan lagi.");
+      setStatus("error");
+      migu.reset();
+      return;
+    }
+
     if (!chatReady) {
       setError("Chat service is not ready. Set OPENAI_BASE_URL on the backend.");
       setStatus("error");
