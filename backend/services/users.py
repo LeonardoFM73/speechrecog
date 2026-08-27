@@ -82,6 +82,12 @@ async def update_role(username: str, role: str) -> dict | None:
     return {"username": username, "role": role}
 
 
+async def delete_user(username: str) -> bool:
+    col = _Store.get_collection()
+    result = await col.delete_one({"username": username})
+    return result.deleted_count > 0
+
+
 async def seed_admin_user() -> None:
     """Create default admin user if not exists."""
     admin_username = os.environ.get("ADMIN_USERNAME", "admin")

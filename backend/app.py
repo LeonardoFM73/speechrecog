@@ -408,6 +408,27 @@ async def admin_update_role(
     return {"access_token": new_token, "token_type": "bearer", "username": username, "role": payload.role}
 
 
+@app.delete("/admin/users/{username}")
+async def admin_delete_user(
+    username: str,
+    authorization: str | None = Header(default=None),
+) -> Any:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    decoded = auth_service.decode_token(authorization[len("Bearer "):])
+    if not decoded:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if decoded["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    existing = await users_service.get_user(username)
+    if not existing:
+        raise HTTPException(status_code=404, detail="User not found")
+    deleted = await users_service.delete_user(username)
+    if not deleted:
+        raise HTTPException(status_code=500, detail="Failed to delete user")
+    return {"deleted": username}
+
+
 @app.get("/admin/users", response_model=list[dict])
 async def admin_list_users(
     authorization: str | None = Header(default=None),

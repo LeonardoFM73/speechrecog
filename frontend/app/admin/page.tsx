@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft, Shield, User, Loader } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { ApiError } from "@/services/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -157,6 +156,28 @@ export default function AdminPage() {
 
                     {user.username === currentUser && (
                       <span className="text-[10px] text-slate-400 italic">You</span>
+                    )}
+
+                    {user.username !== currentUser && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Hapus akun "${user.username}"?`)) return;
+                          const token = localStorage.getItem("speechrecog.auth_token");
+                          const r = await fetch(`${API_BASE}/admin/users/${user.username}`, {
+                            method: "DELETE",
+                            headers: { Authorization: `Bearer ${token}` },
+                          });
+                          if (!r.ok) {
+                            const json = await r.json().catch(() => ({}));
+                            setError((json.detail as string) ?? `HTTP ${r.status}`);
+                            return;
+                          }
+                          setUsers((prev) => prev.filter((u) => u.username !== user.username));
+                        }}
+                        className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded border border-red-200 hover:bg-red-50 transition"
+                      >
+                        Hapus
+                      </button>
                     )}
                   </div>
                 </div>
