@@ -1,15 +1,17 @@
 "use client";
 
 import { useCallback } from "react";
-import { LogOut, Settings, Shield, User } from "lucide-react";
+import { LogOut, Settings, Shield, User, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 interface SidebarProps {
   onOpenSettings?: () => void;
   isAdmin?: boolean;
+  open?: boolean;
+  onToggle?: () => void;
 }
 
-export default function Sidebar({ onOpenSettings, isAdmin = false }: SidebarProps) {
+export default function Sidebar({ onOpenSettings, isAdmin = false, open = true, onToggle }: SidebarProps) {
   const { username, role, logout } = useAuth();
 
   const handleLogout = useCallback(() => {
@@ -18,12 +20,35 @@ export default function Sidebar({ onOpenSettings, isAdmin = false }: SidebarProp
   }, [logout]);
 
   return (
-    <aside className="fixed left-0 top-0 z-50 flex h-full w-16 flex-col items-center bg-white/80 border-r border-slate-200 shadow-sm backdrop-blur">
-      <div className="flex h-16 w-full items-center justify-center border-b border-slate-100">
-        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-amber-400 to-rose-400 flex items-center justify-center text-white font-bold text-sm">
-          M
+    <>
+      {!open && onToggle && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-50 flex h-10 w-7 items-center justify-center rounded-r-xl bg-white/80 border-y border-r border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition shadow-sm backdrop-blur"
+          title="Show sidebar"
+        >
+          <PanelLeftOpen className="h-4 w-4" />
+        </button>
+      )}
+      <aside className={`fixed left-0 top-0 z-50 h-full flex-col items-center bg-white/80 border-r border-slate-200 shadow-sm backdrop-blur transition-all duration-300 ${open ? "w-[52px] flex" : "w-0 overflow-hidden"}`}>
+        <div className="flex h-[52px] w-full items-center justify-center border-b border-slate-100">
+          {onToggle && (
+            <button
+              type="button"
+              onClick={onToggle}
+              className="flex h-full w-full items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              title={open ? "Hide sidebar" : "Show sidebar"}
+            >
+              {open ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+            </button>
+          )}
+          {!onToggle && (
+            <div className="h-7 w-7 rounded-full bg-gradient-to-br from-amber-400 to-rose-400 flex items-center justify-center text-white font-bold text-xs">
+              M
+            </div>
+          )}
         </div>
-      </div>
 
       <nav className="flex flex-col gap-2 flex-1 pt-4 px-2">
         {onOpenSettings && (
@@ -77,5 +102,6 @@ export default function Sidebar({ onOpenSettings, isAdmin = false }: SidebarProp
         </button>
       </div>
     </aside>
+  </>
   );
 }

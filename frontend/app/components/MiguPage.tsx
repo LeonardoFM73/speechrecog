@@ -50,6 +50,11 @@ export default function MiguPage() {
   const [scenario, setScenario] = useState<ChatScenario>(PRESET_SCENARIOS[0]);
   const [customScenario, setCustomScenario] = useState<string>("");
 
+  // Reset history saat scenario berganti
+  useEffect(() => {
+    setHistory([]);
+  }, [scenario.id]);
+
   // Settings state
   const [ttsSpeed, setTtsSpeed] = useState<number>(1.0);
   const [jpLevel, setJpLevel] = useState<JpLevel>("n3");
@@ -78,6 +83,7 @@ export default function MiguPage() {
   // UI state
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [historyOpen, setHistoryOpen] = useState<boolean>(false);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
 
   // Pipe mic level into the Migu mouth and emotion
   useEffect(() => {
@@ -441,166 +447,152 @@ export default function MiguPage() {
       <RoomBackground />
 
       <Sidebar
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen((v) => !v)}
         onOpenSettings={() => setSettingsOpen((v) => !v)}
         isAdmin={role === "admin"}
       />
 
-      <div className="relative z-10 ml-16 flex min-h-screen w-full flex-col md:ml-20">
-        {/* Top bar */}
-        <div className="flex w-full items-center justify-between px-4 pt-4">
-          <div className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm backdrop-blur">
-            Migu - 日本語
+      {/* Top section — constrained area after sidebar (badge + settings only) */}
+      <div className={`relative z-10 transition-all duration-300 ${sidebarOpen ? "pl-[52px] lg:pl-16" : "pl-0"}`}>
+        <div className="mx-auto w-full max-w-2xl px-4 pt-4">
+          <div className="flex w-full items-center justify-between">
+            <div className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm backdrop-blur">
+              Migu - 日本語
+            </div>
+          </div>
+          <div className="mx-auto mt-2 w-full max-w-md">
+            <SettingsDrawer
+              open={settingsOpen}
+              mode={mode}
+              scenario={scenario}
+              customScenario={customScenario}
+              speakers={speakers}
+              selectedSpeaker={selectedSpeaker}
+              ttsSpeed={ttsSpeed}
+              jpLevel={jpLevel}
+              maxTurns={maxTurns}
+              chatReady={chatReady}
+              ttsReady={ttsReady}
+              onModeChange={setMode}
+              onScenarioChange={(s) =>
+                setScenario({
+                  ...s,
+                  description: s.id === CUSTOM_SCENARIO_ID ? customScenario : s.description,
+                })
+              }
+              onCustomScenarioChange={(t) => {
+                setCustomScenario(t);
+                if (scenario.id === CUSTOM_SCENARIO_ID) {
+                  setScenario((prev) => ({ ...prev, description: t }));
+                }
+              }}
+              onSpeakerChange={setSelectedSpeaker}
+              onTtsSpeedChange={setTtsSpeed}
+              onJpLevelChange={setJpLevel}
+              onMaxTurnsChange={setMaxTurns}
+            />
           </div>
         </div>
 
-        {/* Title */}
-        <div className="px-4 text-center">
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-800">
-            Bicara dengan Migu
-          </h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Migu akan mengulang katamu. Sentuh dia untuk berinteraksi.
-          </p>
-        </div>
-
-        {/* Settings drawer */}
-        <div className="px-4 pt-2 w-full max-w-md mx-auto">
-          <SettingsDrawer
-          open={settingsOpen}
-          mode={mode}
-          scenario={scenario}
-          customScenario={customScenario}
-          speakers={speakers}
-          selectedSpeaker={selectedSpeaker}
-          ttsSpeed={ttsSpeed}
-          jpLevel={jpLevel}
-          maxTurns={maxTurns}
-          chatReady={chatReady}
-          ttsReady={ttsReady}
-          onModeChange={setMode}
-          onScenarioChange={(s) =>
-            setScenario({
-              ...s,
-              description: s.id === CUSTOM_SCENARIO_ID ? customScenario : s.description,
-            })
-          }
-          onCustomScenarioChange={(t) => {
-            setCustomScenario(t);
-            if (scenario.id === CUSTOM_SCENARIO_ID) {
-              setScenario((prev) => ({ ...prev, description: t }));
-            }
-          }}
-          onSpeakerChange={setSelectedSpeaker}
-          onTtsSpeedChange={setTtsSpeed}
-          onJpLevelChange={setJpLevel}
-          onMaxTurnsChange={setMaxTurns}
-        />
-        </div>
-
-        {/* Migu stage */}
-        <div className="mt-6 flex w-full flex-1 flex-col items-center justify-center">
-          <TalkingMigu
-            emotion={effectiveEmotion}
-            size={320}
-            audioLevelRef={audioLevelRef}
-            speechText={effectiveSpeech}
-            onTapHead={onMiguHead}
-            onTapBelly={onMiguBelly}
-            onTapBeak={onMiguBeak}
-            onTapWing={onMiguWing}
-            onTapFoot={onMiguFoot}
-          />
-
-          {/* Status + error + result + history toggle */}
-          <MicStage
-            status={status}
-            error={error}
-            transcribedText={transcribedText}
-            replyAudioUrl={replyAudioUrl}
-            mode={mode}
-            historyOpen={historyOpen}
-            onReplay={() => replyAudioUrl && playBlob(replyAudioUrl)}
-            onToggleHistory={() => setHistoryOpen((v) => !v)}
-          />
-
-          {/* Error notification */}
-          {error && (
-            <div className="mt-3 w-full max-w-sm rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
-              {error}
-            </div>
-          )}
-
-          {/* Result text (last transcription) */}
-          {transcribedText && mode === "transcribe" && status === "complete" && (
-            <div className="mt-4 w-full max-w-sm rounded-2xl border border-amber-200 bg-white/80 p-3 text-sm text-slate-800 shadow-sm backdrop-blur">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                Kamu bilang
-              </div>
-              <div className="mt-1 leading-relaxed">{transcribedText}</div>
-            </div>
-          )}
-
-          {/* History peek */}
-          {mode === "roleplay" && history.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setHistoryOpen((v) => !v)}
-              className="mt-3 flex items-center gap-1 text-xs font-medium text-slate-600 underline-offset-2 hover:underline"
-            >
-              {historyOpen ? "Sembunyikan" : "Lihat"} riwayat ({history.length})
-            </button>
-          )}
-        </div>
-
-        {/* Bottom mic button */}
-        <div className="fixed bottom-6 left-1/2 z-20 -translate-x-1/2">
+        {/* Error / result text */}
+        {error && (
+          <div className="mx-auto mt-3 w-full max-w-sm rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {error}
+          </div>
+        )}
+        {transcribedText && mode === "transcribe" && status === "complete" && (
+          <div className="mx-auto mt-4 w-full max-w-sm rounded-2xl border border-amber-200 bg-white/80 p-3 text-sm text-slate-800 shadow-sm backdrop-blur">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Kamu bilang</div>
+            <div className="mt-1 leading-relaxed">{transcribedText}</div>
+          </div>
+        )}
+        {mode === "roleplay" && history.length > 0 && (
           <button
             type="button"
-            disabled={denied}
-            onClick={isRecording ? handleStop : handleStart}
-            className={`relative flex h-20 w-20 items-center justify-center rounded-full text-white shadow-2xl transition-all focus:outline-none focus:ring-4 ${
-              denied
-                ? "cursor-not-allowed bg-red-900/60"
-                : isRecording
-                  ? "scale-110 bg-red-500 focus:ring-red-300"
-                  : "bg-gradient-to-br from-amber-400 to-amber-600 hover:scale-105 focus:ring-amber-300"
-            }`}
-            aria-label={isRecording ? "Stop" : "Record"}
+            onClick={() => setHistoryOpen((v) => !v)}
+            className="mx-auto mt-3 flex items-center gap-1 text-xs font-medium text-slate-600 underline-offset-2 hover:underline"
           >
-            {isRecording && (
-              <>
-                {[0, 0.5, 1].map((delay) => (
-                  <motion.span
-                    key={delay}
-                    className="absolute inset-0 rounded-full border-4 border-red-300"
-                    initial={{ opacity: 0, scale: 1 }}
-                    animate={{ opacity: [0, 0.7, 0], scale: [1, 1.3, 1.6] }}
-                    transition={{ duration: 1.5, repeat: Infinity, delay }}
-                  />
-                ))}
-              </>
-            )}
-            {denied ? (
-              <MicOff className="h-8 w-8" />
-            ) : isRecording ? (
-              <span className="block h-6 w-6 rounded-sm bg-white" />
-            ) : (
-              <Mic className="h-8 w-8" />
-            )}
+            {historyOpen ? "Sembunyikan" : "Lihat"} riwayat ({history.length})
           </button>
-          <div className="mt-2 text-center text-[11px] font-medium text-slate-600">
-            {denied ? "Izin mikrofon ditolak" : isRecording ? "Tekan untuk berhenti" : "Tekan untuk bicara"}
-          </div>
-        </div>
+        )}
+      </div>
+
+      {/* Title — full viewport centered */}
+      <div className={`relative z-10 px-4 pt-4 text-center transition-all duration-300 ${sidebarOpen ? "pl-[52px]" : "pl-0"}`}>
+        <h1 className="text-3xl font-extrabold tracking-tight text-slate-800">Bicara dengan Migu</h1>
+        <p className="mt-1 text-sm text-slate-600">Migu akan mengulang katamu. Sentuh dia untuk berinteraksi.</p>
+      </div>
+
+      {/* Migu stage — full viewport width, centered */}
+      <div className={`relative z-10 flex min-h-[60vh] w-full flex-col items-center justify-center transition-all duration-300 ${sidebarOpen ? "pl-[52px]" : "pl-0"}`}>
+        <TalkingMigu
+          emotion={effectiveEmotion}
+          size={320}
+          audioLevelRef={audioLevelRef}
+          speechText={effectiveSpeech}
+          onTapHead={onMiguHead}
+          onTapBelly={onMiguBelly}
+          onTapBeak={onMiguBeak}
+          onTapWing={onMiguWing}
+          onTapFoot={onMiguFoot}
+        />
+        <MicStage
+          status={status}
+          error={error}
+          transcribedText={transcribedText}
+          replyAudioUrl={replyAudioUrl}
+          mode={mode}
+          historyOpen={historyOpen}
+          onReplay={() => replyAudioUrl && playBlob(replyAudioUrl)}
+          onToggleHistory={() => setHistoryOpen((v) => !v)}
+        />
+      </div>
+
+      {/* Bottom mic button */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 flex justify-center pb-4 sm:pb-6">
+        <button
+          type="button"
+          disabled={denied}
+          onClick={isRecording ? handleStop : handleStart}
+          className={`relative flex h-14 w-14 items-center justify-center rounded-full text-white shadow-2xl transition-all focus:outline-none focus:ring-4 ${
+            denied
+              ? "cursor-not-allowed bg-red-900/60"
+              : isRecording
+                ? "scale-110 bg-red-500 focus:ring-red-300"
+                : "bg-gradient-to-br from-amber-400 to-amber-600 hover:scale-105 focus:ring-amber-300"
+          }`}
+          aria-label={isRecording ? "Stop" : "Record"}
+        >
+          {isRecording && (
+            <>
+              {[0, 0.5, 1].map((delay) => (
+                <motion.span
+                  key={delay}
+                  className="absolute inset-0 rounded-full border-4 border-red-300"
+                  initial={{ opacity: 0, scale: 1 }}
+                  animate={{ opacity: [0, 0.7, 0], scale: [1, 1.3, 1.6] }}
+                  transition={{ duration: 1.5, repeat: Infinity, delay }}
+                />
+              ))}
+            </>
+          )}
+          {denied ? (
+            <MicOff className="h-6 w-6" />
+          ) : isRecording ? (
+            <span className="block h-4 w-4 rounded-sm bg-white" />
+          ) : (
+            <Mic className="h-6 w-6" />
+          )}
+        </button>
       </div>
 
       {/* Mic permission error notification */}
       {(permissionError || !mediaDevicesSupported) && (
-        <div className="mx-auto mt-4 w-full max-w-sm animate-pulse rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-center">
+        <div className="mx-auto w-full max-w-sm animate-pulse rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-center">
           <p className="text-sm font-semibold text-red-700">Mikrofon tidak bisa digunakan</p>
           <p className="mt-1 text-xs text-red-600">
-            {permissionError ??
-              "Browser Anda tidak mendukung akses mikrofon. Pastikan kamu membuka halaman ini melalui HTTPS atau localhost."}
+            {permissionError ?? "Pastikan mengakses halaman ini via HTTPS atau localhost."}
           </p>
         </div>
       )}

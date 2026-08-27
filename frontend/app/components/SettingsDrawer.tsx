@@ -98,78 +98,80 @@ export default function SettingsDrawer({
               </div>
             )}
 
-            {/* General settings */}
-            <div className="border-t border-slate-200 pt-3 space-y-3">
-              <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                Pengaturan Umum
-              </div>
+            {/* General settings — only in roleplay mode */}
+            {mode === "roleplay" && (
+              <div className="border-t border-slate-200 pt-3 space-y-3">
+                <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  Pengaturan Umum
+                </div>
 
-              {/* Speed */}
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">
-                  Kecepatan Suara — {ttsSpeed.toFixed(1)}x
-                </label>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={2}
-                  step={0.1}
-                  value={ttsSpeed}
-                  onChange={(e) => onTtsSpeedChange(parseFloat(e.target.value))}
-                  className="w-full accent-amber-500"
-                />
-                <div className="flex justify-between text-[10px] text-slate-400">
-                  <span>0.5x</span>
-                  <span>2.0x</span>
+                {/* Speed */}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                    Kecepatan Suara — {ttsSpeed.toFixed(1)}x
+                  </label>
+                  <input
+                    type="range"
+                    min={0.5}
+                    max={2}
+                    step={0.1}
+                    value={ttsSpeed}
+                    onChange={(e) => onTtsSpeedChange(parseFloat(e.target.value))}
+                    className="w-full accent-amber-500"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>0.5x</span>
+                    <span>2.0x</span>
+                  </div>
+                </div>
+
+                {/* JP Level */}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                    Tingkat Bahasa Jepang
+                  </label>
+                  <div className="flex gap-1">
+                    {JP_LEVELS.map((lvl) => (
+                      <button
+                        key={lvl}
+                        type="button"
+                        onClick={() => onJpLevelChange(lvl)}
+                        className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
+                          jpLevel === lvl
+                            ? "border-amber-500 bg-amber-500 text-white shadow"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                        }`}
+                      >
+                        {JP_LEVEL_LABELS[lvl]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Max Turns */}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">
+                    Batas Percakapan — {maxTurns} turn
+                  </label>
+                  <input
+                    type="range"
+                    min={2}
+                    max={50}
+                    step={1}
+                    value={maxTurns}
+                    onChange={(e) => onMaxTurnsChange(parseInt(e.target.value))}
+                    className="w-full accent-rose-500"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>2</span>
+                    <span>50</span>
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    AI akan mengakhiri percakapan secara natural saat mendekati batas.
+                  </p>
                 </div>
               </div>
-
-              {/* JP Level */}
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">
-                  Tingkat Bahasa Jepang
-                </label>
-                <div className="flex gap-1">
-                  {JP_LEVELS.map((lvl) => (
-                    <button
-                      key={lvl}
-                      type="button"
-                      onClick={() => onJpLevelChange(lvl)}
-                      className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-medium transition ${
-                        jpLevel === lvl
-                          ? "border-amber-500 bg-amber-500 text-white shadow"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                      }`}
-                    >
-                      {JP_LEVEL_LABELS[lvl]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Max Turns */}
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">
-                  Batas Percakapan — {maxTurns} turn
-                </label>
-                <input
-                  type="range"
-                  min={2}
-                  max={50}
-                  step={1}
-                  value={maxTurns}
-                  onChange={(e) => onMaxTurnsChange(parseInt(e.target.value))}
-                  className="w-full accent-rose-500"
-                />
-                <div className="flex justify-between text-[10px] text-slate-400">
-                  <span>2</span>
-                  <span>50</span>
-                </div>
-                <p className="mt-1 text-[10px] text-slate-400">
-                  AI akan mengakhiri percakapan secara natural saat mendekati batas.
-                </p>
-              </div>
-            </div>
+            )}
 
             {!chatReady && mode === "roleplay" && (
               <div className="mt-3 rounded-lg border-yellow-300 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
