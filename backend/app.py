@@ -531,6 +531,7 @@ async def admin_list_users(
 # ---------------------------------------------------------------------------
 app.include_router(sessions_service.router)
 app.include_router(scenarios_service.router)
+app.include_router(scenarios_service.public_router)
 
 
 if __name__ == "__main__":

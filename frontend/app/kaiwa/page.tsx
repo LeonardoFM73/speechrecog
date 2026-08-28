@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Mic, MicOff, ArrowLeft, BookOpen, Volume2 } from "lucide-react";
-import { ChatMessage, JpLevel, JP_LEVELS, JP_LEVEL_LABELS, KaiwaScenario, TranscriptionStatus } from "@/types/audio";
-import { chatClient, kaiwaClient, SessionTurn, ttsClient } from "@/services/api";
+import { ChatMessage, JpLevel, JP_LEVELS, JP_LEVEL_LABELS, KaiwaScenario } from "@/types/audio";
+import { kaiwaClient, SessionTurn, ttsClient } from "@/services/api";
 import { useMicrophone } from "@/hooks/useMicrophone";
 import ChatHistory from "@/components/ChatHistory";
 import Sidebar from "@/components/Sidebar";
@@ -24,15 +24,12 @@ interface KaiwaTurn {
 export default function KaiwaPage() {
   const { role, token } = useAuth();
   const session = useSessionContext();
-  const audioLevelRef = useRef<number>(0);
-
   const {
     isRecording,
     startRecording,
     stopRecording,
     hasPermission,
     permissionError,
-    level,
     mediaDevicesSupported,
   } = useMicrophone();
 
@@ -46,7 +43,7 @@ export default function KaiwaPage() {
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [jpLevel, setJpLevel] = useState<JpLevel>("n3");
-  const [maxTurns, setMaxTurns] = useState(10);
+  const [maxTurns] = useState(10);
   const [replyAudioUrl, setReplyAudioUrl] = useState<string | null>(null);
   const lastBlobUrlRef = useRef<string | null>(null);
   const [ttsReady, setTtsReady] = useState(false);
@@ -57,14 +54,13 @@ export default function KaiwaPage() {
   const [transcribedText, setTranscribedText] = useState("");
   const [error, setError] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Load scenarios
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
     kaiwaClient
-      .fetchScenarios(API_BASE, token, "kaiwa")
+      .fetchScenarios(API_BASE, "kaiwa")
       .then((list) => {
         if (cancelled) return;
         setScenarios(list);
@@ -137,7 +133,7 @@ export default function KaiwaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedScenario?.scenario_id]);
 
-  const askAI = useCallback(async (userText: string, topicHint: string, currentHistory: ChatMessage[]) => {
+  const askAI = useCallback(async (userText: string, _topicHint: string, currentHistory: ChatMessage[]) => {
     if (!selectedScenario) return;
     const q = questions[currentQuestionIdx];
     if (!q) return;

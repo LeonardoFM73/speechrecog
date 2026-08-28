@@ -208,6 +208,21 @@ async def delete_scenario(scenario_id: str, username: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Public scenario list endpoint
+# ---------------------------------------------------------------------------
+public_router = APIRouter(prefix="/scenarios", tags=["scenarios"])
+
+
+@public_router.get("", response_model=list[dict])
+async def public_list_endpoint(kind: str | None = None) -> Any:
+    try:
+        return await list_scenarios(kind=kind)
+    except Exception as exc:
+        logger.exception("public_list_scenarios failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
 # FastAPI router
 # ---------------------------------------------------------------------------
 router = APIRouter(prefix="/admin/scenarios", tags=["scenarios"])

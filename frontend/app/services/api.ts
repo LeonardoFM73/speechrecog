@@ -174,13 +174,10 @@ export async function sendKaiwaChat(
 
 export async function fetchScenarios(
   baseUrl: string,
-  token: string,
   kind?: "roleplay" | "kaiwa",
 ): Promise<KaiwaScenario[]> {
-  const url = `${baseUrl}/admin/scenarios${kind ? `?kind=${kind}` : ""}`;
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const url = `${baseUrl}/scenarios${kind ? `?kind=${kind}` : ""}`;
+  const response = await fetch(url);
   if (!response.ok) {
     throw new ApiError(response.status, `Failed to fetch scenarios: ${response.statusText}`);
   }
