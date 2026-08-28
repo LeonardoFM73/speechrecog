@@ -12,7 +12,7 @@ export type TranscriptionStatus =
   | "error";
 
 // Application mode (single-page has two workflows)
-export type AppMode = "transcribe" | "roleplay";
+export type AppMode = "transcribe" | "roleplay" | "kaiwa";
 
 // Japanese proficiency level (JLPT)
 export type JpLevel = "n5" | "n4" | "n3" | "n2" | "n1";
@@ -98,6 +98,27 @@ export const PRESET_SCENARIOS: ChatScenario[] = [
 ];
 
 export const CUSTOM_SCENARIO_ID = "custom";
+
+// ---------------------------------------------------------------------------
+// Kaiwa Renshuu types
+// ---------------------------------------------------------------------------
+export interface KaiwaQuestion {
+  id: string;
+  question: string;       // Bahasa Indonesia
+  topic_hint: string;     // Japanese topic context for LLM
+}
+
+export interface KaiwaScenario {
+  scenario_id: string;
+  kind: "roleplay" | "kaiwa";
+  label: string;
+  emoji: string;
+  description: string;    // Japanese system prompt context
+  is_preset: boolean;
+  kind_config?: {
+    questions: KaiwaQuestion[];
+  };
+}
 
 // ---------------------------------------------------------------------------
 // TTS (VOICEVOX) types

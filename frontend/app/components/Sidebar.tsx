@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { LogOut, Settings, Shield, User, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LogOut, Settings, Shield, User, PanelLeftClose, PanelLeftOpen, BookOpen } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 interface SidebarProps {
@@ -62,6 +62,13 @@ export default function Sidebar({ onOpenSettings, isAdmin = false, open = true, 
           </button>
         )}
 
+        <a
+          href="/kaiwa"
+          className="flex h-10 w-10 items-center justify-center rounded-xl text-amber-500 hover:bg-amber-50 transition"
+          title="Kaiwa Renshuu"
+        >
+          <BookOpen className="h-5 w-5" />
+        </a>
         {isAdmin && (
           <a
             href="/admin"

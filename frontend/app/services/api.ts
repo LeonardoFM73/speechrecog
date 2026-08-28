@@ -1,6 +1,6 @@
 /** API client for the transcription + chat + TTS + sessions backend. */
 
-import { ChatMessage, JpLevel, Speaker, TranscriptionResult, TtsRequest } from "@/types/audio";
+import { ChatMessage, JpLevel, KaiwaScenario, Speaker, TranscriptionResult, TtsRequest } from "@/types/audio";
 
 export class ApiError extends Error {
   constructor(
@@ -136,6 +136,60 @@ export async function sendChat(
 export const chatClient = { send: sendChat };
 
 // ---------------------------------------------------------------------------
+// Kaiwa Renshuu
+// ---------------------------------------------------------------------------
+export interface KaiwaChatRequest {
+  user_text: string;
+  scenario_id: string;
+  question_id: string;
+  history: ChatMessage[];
+  jp_level?: JpLevel;
+  max_turns?: number;
+}
+
+export async function sendKaiwaChat(
+  payload: KaiwaChatRequest,
+  baseUrl: string,
+): Promise<ChatResponse> {
+  const response = await fetch(`${baseUrl}/kaiwa/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const json = (await response.json()) as Record<string, unknown>;
+      throw new ApiError(
+        response.status,
+        (typeof json.detail === "string" ? json.detail : "Kaiwa chat request failed") as string,
+      );
+    }
+    throw new ApiError(response.status, `HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  return (await response.json()) as ChatResponse;
+}
+
+export async function fetchScenarios(
+  baseUrl: string,
+  token: string,
+  kind?: "roleplay" | "kaiwa",
+): Promise<KaiwaScenario[]> {
+  const url = `${baseUrl}/admin/scenarios${kind ? `?kind=${kind}` : ""}`;
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, `Failed to fetch scenarios: ${response.statusText}`);
+  }
+  return (await response.json()) as KaiwaScenario[];
+}
+
+export const kaiwaClient = { send: sendKaiwaChat, fetchScenarios };
+
+// ---------------------------------------------------------------------------
 // TTS (VOICEVOX)
 // ---------------------------------------------------------------------------
 
@@ -250,7 +304,7 @@ export interface SessionDoc {
   username: string;
   started_at: string;
   ended_at: string | null;
-  mode: "transcribe" | "roleplay";
+  mode: "transcribe" | "roleplay" | "kaiwa";
   scenario_id: string;
   scenario_text: string | null;
   speaker_id: number | null;

@@ -20,7 +20,7 @@ interface Props {
   error: string;
   transcribedText: string;
   replyAudioUrl: string | null;
-  mode: "transcribe" | "roleplay";
+  mode: "transcribe" | "roleplay" | "kaiwa";
   historyOpen: boolean;
   onReplay: () => void;
   onToggleHistory: () => void;

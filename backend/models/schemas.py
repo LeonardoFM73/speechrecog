@@ -86,6 +86,36 @@ class ChatResponse(BaseModel):
     error: str | None = Field(default=None, description="Error message if failed")
 
 
+class KaiwaChatRequest(BaseModel):
+    """Request body for POST /kaiwa/chat."""
+
+    user_text: str = Field(
+        min_length=1,
+        max_length=2000,
+        description="The Japanese text the user just said (from STT or typed)",
+    )
+    scenario_id: str = Field(
+        min_length=1,
+        description="Scenario identifier (must be kind='kaiwa')",
+    )
+    question_id: str = Field(
+        min_length=1,
+        description="Question ID from the scenario's kind_config.questions",
+    )
+    history: list[ChatMessage] = Field(
+        default_factory=list,
+        max_length=50,
+        description="Prior turns; the current user_text is added by the server",
+    )
+    jp_level: Literal["n5", "n4", "n3", "n2", "n1"] = Field(
+        default="n3", description="Japanese difficulty level for the LLM"
+    )
+    max_turns: int = Field(
+        default=10, ge=2, le=100,
+        description="Conversation turn limit; AI will suggest ending near this count",
+    )
+
+
 # ---------------------------------------------------------------------------
 # TTS (VOICEVOX) schemas
 # ---------------------------------------------------------------------------
@@ -167,7 +197,7 @@ class SessionCreateRequest(BaseModel):
         max_length=64,
         description="Client-generated session UUID; idempotent on insert",
     )
-    mode: Literal["transcribe", "roleplay"] = Field(
+    mode: Literal["transcribe", "roleplay", "kaiwa"] = Field(
         default="roleplay", description="Application mode for this session"
     )
     scenario_id: str = Field(default="", description="Scenario identifier (preset or 'custom')")
@@ -232,3 +262,54 @@ class SessionMessageResponse(BaseModel):
     """POST /sessions/{id}/messages response."""
 
     turn: int = Field(description="The assigned monotonic turn index")
+
+
+# ---------------------------------------------------------------------------
+# Scenario management schemas
+# ---------------------------------------------------------------------------
+class KaiwaQuestion(BaseModel):
+    """One练习 (practice) question in a Kaiwa Renshuu scenario."""
+
+    id: str = Field(description="Unique question ID within the scenario")
+    question: str = Field(min_length=1, description="Question text in Indonesian")
+    topic_hint: str = Field(default="", description="Japanese topic context for LLM")
+
+
+class ScenarioKindConfig(BaseModel):
+    """Kaiwa-specific configuration (questions list)."""
+
+    questions: list[KaiwaQuestion] = Field(default_factory=list)
+
+
+class ScenarioDoc(BaseModel):
+    """Persisted scenario document."""
+
+    scenario_id: str = Field(description="Unique slug identifier")
+    kind: Literal["roleplay", "kaiwa"] = Field(description="Scenario type")
+    label: str = Field(description="UI display name")
+    emoji: str = Field(default="", description="Emoji icon")
+    description: str = Field(description="System prompt context (Japanese)")
+    is_preset: bool = Field(default=False, description="True for seeded presets")
+    created_by: str | None = Field(default=None, description="Admin username who created it")
+    created_at: float = Field(description="Unix epoch seconds")
+    updated_at: float = Field(description="Unix epoch seconds")
+    kind_config: ScenarioKindConfig = Field(default_factory=ScenarioKindConfig)
+
+
+class ScenarioCreateRequest(BaseModel):
+    """POST /admin/scenarios request body."""
+
+    kind: Literal["roleplay", "kaiwa"]
+    label: str = Field(min_length=1, max_length=200)
+    emoji: str = Field(default="", max_length=10)
+    description: str = Field(min_length=1, max_length=2000)
+    kind_config: ScenarioKindConfig = Field(default_factory=ScenarioKindConfig)
+
+
+class ScenarioUpdateRequest(BaseModel):
+    """PATCH /admin/scenarios/{id} request body."""
+
+    label: str | None = None
+    emoji: str | None = None
+    description: str | None = None
+    kind_config: ScenarioKindConfig | None = None

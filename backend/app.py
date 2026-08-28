@@ -20,6 +20,7 @@ from models.schemas import (
     ChatRequest,
     ChatResponse,
     HealthResponse,
+    KaiwaChatRequest,
     RoleUpdateRequest,
     SpeakersResponse,
     TranscribeResponse,
@@ -31,6 +32,7 @@ from services import tts as tts_service
 from services import sessions as sessions_service
 from services import users as users_service
 from services import auth as auth_service
+from services import scenarios as scenarios_service
 from models.schemas import UserCreateRequest, LoginRequest, TokenResponse
 
 # ---------------------------------------------------------------------------
@@ -116,6 +118,17 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("Sessions disabled: %s", exc)
 
+    # Scenarios — seed presets, ensure indexes.
+    try:
+        await scenarios_service.ensure_indexes()
+        await scenarios_service.seed_preset_scenarios()
+        if await scenarios_service.ping():
+            logger.info("Scenarios ready (MongoDB at %s)", os.environ.get("MONGODB_URL", "mongodb://mongo:27017"))
+        else:
+            logger.warning("Scenarios: MongoDB unreachable")
+    except Exception as exc:
+        logger.warning("Scenarios disabled: %s", exc)
+
     yield
 
     # TTS shutdown — close HTTP client
@@ -134,6 +147,11 @@ async def lifespan(app: FastAPI):
     try:
         if sessions_service._Store.client is not None:
             sessions_service._Store.client.close()
+    except Exception:
+        pass
+    try:
+        if scenarios_service._Store.client is not None:
+            scenarios_service._Store.client.close()
     except Exception:
         pass
 
@@ -343,6 +361,67 @@ async def chat(req: ChatRequest) -> Any:
 
 
 # ---------------------------------------------------------------------------
+# Kaiwa Renshuu endpoint
+# ---------------------------------------------------------------------------
+@app.post("/kaiwa/chat", response_model=ChatResponse)
+async def kaiwa_chat(req: KaiwaChatRequest) -> Any:
+    """Kaiwa Renshuu — teacher-led Japanese practice with topic focus.
+
+    Looks up the kaiwa scenario by scenario_id, finds the question by
+    question_id, then delegates to ChatService.kaiwa_chat().
+    """
+    if not chat_service.is_ready():
+        raise HTTPException(
+            status_code=503,
+            detail="Chat service is not available. Set OPENAI_BASE_URL and restart the backend.",
+        )
+
+    scenario = await scenarios_service.get_scenario(req.scenario_id)
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
+    if scenario.get("kind") != "kaiwa":
+        raise HTTPException(status_code=400, detail="Scenario is not a kaiwa scenario")
+
+    questions = (scenario.get("kind_config") or {}).get("questions", [])
+    question_doc = next((q for q in questions if q.get("id") == req.question_id), None)
+    if not question_doc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Question '{req.question_id}' not found in scenario",
+        )
+
+    new_history = list(req.history) + [
+        {"role": "user", "text": req.user_text},
+    ]
+
+    try:
+        result = await chat_service.get_service().kaiwa_chat(
+            user_text=req.user_text,
+            scenario_description=scenario.get("description", ""),
+            question=question_doc.get("question", ""),
+            question_topic_hint=question_doc.get("topic_hint", ""),
+            history=req.history,
+            jp_level=req.jp_level,
+            max_turns=req.max_turns,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Kaiwa LLM call failed: %s", exc, exc_info=True)
+        raise HTTPException(status_code=502, detail=f"LLM provider error: {exc}")
+
+    new_history.append({"role": "model", "text": result["reply_jp"]})
+
+    return {
+        "success": True,
+        "reply_jp": result["reply_jp"],
+        "reply_translation": result["reply_translation"],
+        "history": new_history,
+        "error": None,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Auth endpoints
 # ---------------------------------------------------------------------------
 @app.post("/auth/register", response_model=TokenResponse)
@@ -451,6 +530,7 @@ async def admin_list_users(
 # Session persistence router
 # ---------------------------------------------------------------------------
 app.include_router(sessions_service.router)
+app.include_router(scenarios_service.router)
 
 
 if __name__ == "__main__":

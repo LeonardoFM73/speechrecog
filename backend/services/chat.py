@@ -62,6 +62,48 @@ DEFAULT_SCENARIO = (
 )
 
 
+def build_kaiwa_system_prompt(
+    scenario_description: str,
+    question: str,
+    question_topic_hint: str,
+    history_text: str,
+    jp_level: str,
+    turn_count: int,
+    max_turns: int,
+) -> str:
+    """Build system prompt for Kaiwa Renshuu mode (teacher-led practice)."""
+    level_info, length_rule = JP_LEVELS.get(jp_level, JP_LEVELS["n3"])
+    closing_hint = ""
+    if max_turns and turn_count >= max_turns - 2:
+        closing_hint = (
+            "\n- この会話は大変長くなりました。自然な結論に向けて、"
+            "まとめや別れの挨拶を含めて会話を終わらせてください"
+        )
+    return f"""\
+あなたは日本語の先生です。生徒に日本語会話の練習を教えます。
+
+# 今日のテーマ / シナリオ
+{scenario_description}
+
+# 練習問題 (Latihan Mendan)
+生徒に以下の質問を日本語で聞いてください：
+{question}
+
+# ルール
+- 必ず日本語で返答してください ({level_info})
+- {length_rule}
+- 生徒が答えたら、まず褒め称え（「いいですね」「素晴らしいです」等）、必要なら自然に軽い訂正を入れてから、同じテーマに関連する次の質問をしてください
+- 生徒が何を言っても、必ず「{question_topic_hint}」というテーマに戻してください。違う話題に行ったら優しくテーマに戻してください
+- 翻訳 (translation) はインドネシア語で1文、提供してください
+- 必ず以下のJSON形式で出力してください:
+  {{"reply_jp": "<日本語の返答>", "reply_translation": "<インドネシア語の翻訳>"}}
+{closing_hint}
+
+# 会話履歴
+{history_text}
+"""
+
+
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
@@ -162,6 +204,91 @@ class ChatService:
         logger.info(
             "Chat request: scenario_len=%d history_turns=%d user_chars=%d",
             len(scenario or ""),
+            min(len(history), 10),
+            len(user_text),
+        )
+
+        try:
+            resp = await self._client.post(
+                f"{self._base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self._model,
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "response_format": {"type": "json_object"},
+                },
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.error("LLM HTTP error: %s", exc)
+            raise
+
+        data = resp.json()
+        raw: str = ""
+        try:
+            raw = data["choices"][0]["message"]["content"] or ""
+        except (KeyError, IndexError, TypeError) as exc:
+            logger.error("Unexpected LLM response shape: %s\nPayload: %s", exc, data)
+            raise ValueError(f"Unexpected LLM response shape: {exc}") from exc
+
+        parsed: dict[str, Any] = self._parse_json(raw)
+
+        return {
+            "reply_jp": str(parsed.get("reply_jp", "")).strip(),
+            "reply_translation": str(parsed.get("reply_translation", "")).strip(),
+        }
+
+    # ------------------------------------------------------------------
+    async def kaiwa_chat(
+        self,
+        user_text: str,
+        scenario_description: str,
+        question: str,
+        question_topic_hint: str,
+        history: list[dict],
+        jp_level: str = "n3",
+        max_turns: int = 10,
+    ) -> dict[str, str]:
+        """Kaiwa Renshuu mode — teacher-led practice with topic focus.
+
+        Same I/O contract as :meth:`chat` but uses a different system prompt
+        that keeps the AI on-topic and praises/corrects the student.
+        """
+        if self._client is None:
+            raise RuntimeError("ChatService client not initialised")
+
+        if not user_text or not user_text.strip():
+            raise ValueError("user_text is empty")
+
+        history_text = "\n".join(
+            f"{'User' if m.role == 'user' else 'You'}: {m.text}"
+            for m in history[-10:]
+        ) or "(no prior messages)"
+
+        system_prompt = build_kaiwa_system_prompt(
+            scenario_description=scenario_description,
+            question=question,
+            question_topic_hint=question_topic_hint,
+            history_text=history_text,
+            jp_level=jp_level,
+            turn_count=len(history),
+            max_turns=max_turns,
+        )
+
+        messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+        for m in history[-10:]:
+            role = "assistant" if m.role == "model" else "user"
+            messages.append({"role": role, "content": m.text})
+        messages.append({"role": "user", "content": user_text})
+
+        logger.info(
+            "Kaiwa request: scenario_len=%d question=%r history_turns=%d user_chars=%d",
+            len(scenario_description),
+            question[:40],
             min(len(history), 10),
             len(user_text),
         )
