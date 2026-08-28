@@ -23,6 +23,7 @@ export interface AuthState {
   login: (username: string, password: string) => Promise<void>;
   loginStudent: (customId: string, password: string) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
+  ssoLogin: (jwt: string, username: string, role: string) => void;
   logout: () => void;
 }
 
@@ -111,9 +112,21 @@ export function AuthProvider({ children, apiBase }: { children: ReactNode; apiBa
     setRole(null);
   }, []);
 
+  const ssoLogin = useCallback(
+    (jwt: string, username: string, role: string) => {
+      localStorage.setItem(TOKEN_KEY, jwt);
+      localStorage.setItem(USERNAME_KEY, username);
+      localStorage.setItem(USERNAME_KEY + ".role", role);
+      setToken(jwt);
+      setUsername(username);
+      setRole(role as UserRole);
+    },
+    [],
+  );
+
   return (
     <AuthContext.Provider
-      value={{ token, username, role, loaded, login, loginStudent, register, logout }}
+      value={{ token, username, role, loaded, login, loginStudent, register, ssoLogin, logout }}
     >
       {children}
     </AuthContext.Provider>

@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, File, HTTPException, Header, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Header, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from loguru import logger
 
 from models.schemas import (
@@ -34,6 +34,7 @@ from services import users as users_service
 from services import students as students_service
 from services import auth as auth_service
 from services import scenarios as scenarios_service
+from services import lms_users as lms_users_service
 from models.schemas import UserCreateRequest, LoginRequest, TokenResponse
 
 # ---------------------------------------------------------------------------
@@ -553,6 +554,39 @@ async def admin_list_users(
     for u in users:
         u.setdefault("role", "user")
     return users
+
+
+# ---------------------------------------------------------------------------
+# SSO endpoints
+# ---------------------------------------------------------------------------
+@app.get("/sso-callback")
+async def sso_callback(
+    token: str = Query(...),
+    email: str = Query(...),
+    name: str = Query(...),
+    role: str = Query("user"),
+    expiry: int = Query(...),
+    sig: str = Query(...),
+):
+    verified = auth_service.verify_sso_token(token, sig, expiry, email)
+    if not verified:
+        raise HTTPException(status_code=403, detail="Invalid or expired SSO token")
+
+    lms_user = await lms_users_service.get_lms_user(email)
+    if not lms_user:
+        raise HTTPException(status_code=403, detail="User not found or inactive in JFT Basic LMS")
+
+    jwt_token = auth_service.create_token(email, lms_user["role"])
+    frontend_url = os.environ.get("NEXT_PUBLIC_API_URL", "https://ai-dev-kaiwa.minori.co.id")
+    base = frontend_url.rstrip('/')
+    callback_url = f"{base}/sso-login?jwt={jwt_token}&username={email}&role={lms_user['role']}"
+    return RedirectResponse(url=callback_url, status_code=302)
+
+
+@app.get("/sso-logout")
+async def sso_logout():
+    frontend_url = os.environ.get("NEXT_PUBLIC_API_URL", "https://ai-dev-kaiwa.minori.co.id")
+    return RedirectResponse(url=frontend_url, status_code=302)
 
 
 # ---------------------------------------------------------------------------

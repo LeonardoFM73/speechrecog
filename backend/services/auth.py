@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -33,3 +35,15 @@ def decode_token(token: str) -> dict[str, str] | None:
         }
     except jwt.PyJWTError:
         return None
+
+
+def verify_sso_token(token: str, sig: str, expiry: int, email: str) -> dict | None:
+    secret = os.environ.get("SSO_SECRET", "123Minori!@#")
+    expected_sig = hashlib.md5(f"{secret}|{token}|{expiry}|{email}".encode()).hexdigest()
+    if sig != expected_sig:
+        return None
+    if expiry < time.time():
+        return None
+    if not email or '@' not in email:
+        return None
+    return {"token": token, "email": email, "expiry": expiry}

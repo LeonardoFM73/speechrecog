@@ -2,6 +2,9 @@
 
 import { ChatMessage, JpLevel, KaiwaScenario, Speaker, TranscriptionResult, TtsRequest } from "@/types/audio";
 
+const TOKEN_KEY = "speechrecog.auth_token";
+const USERNAME_KEY = "speechrecog.username";
+
 export class ApiError extends Error {
   constructor(
     public statusCode: number,
@@ -292,6 +295,15 @@ export const authClient = {
       throw new ApiError(r.status, (json.detail as string) ?? `HTTP ${r.status}`);
     }
     return r.json();
+  },
+  async ssoLogin(baseUrl: string, jwt: string, username: string, role: string): Promise<void> {
+    const r = await fetch(`${baseUrl}/auth/me`, {
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+    if (!r.ok) throw new Error("SSO token invalid");
+    localStorage.setItem(TOKEN_KEY, jwt);
+    localStorage.setItem(USERNAME_KEY, username);
+    localStorage.setItem(USERNAME_KEY + ".role", role);
   },
 };
 
