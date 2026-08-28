@@ -21,6 +21,7 @@ export interface AuthState {
   role: UserRole | null;
   loaded: boolean;
   login: (username: string, password: string) => Promise<void>;
+  loginStudent: (customId: string, password: string) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -75,6 +76,19 @@ export function AuthProvider({ children, apiBase }: { children: ReactNode; apiBa
     [apiBase],
   );
 
+  const loginStudent = useCallback(
+    async (customId: string, password: string) => {
+      const res = await authClient.loginStudent(apiBase, customId, password);
+      localStorage.setItem(TOKEN_KEY, res.access_token);
+      localStorage.setItem(USERNAME_KEY, res.username);
+      localStorage.setItem(USERNAME_KEY + ".role", res.role);
+      setToken(res.access_token);
+      setUsername(res.username);
+      setRole(res.role as UserRole);
+    },
+    [apiBase],
+  );
+
   const register = useCallback(
     async (username: string, password: string) => {
       const res = await authClient.register(apiBase, username, password);
@@ -99,7 +113,7 @@ export function AuthProvider({ children, apiBase }: { children: ReactNode; apiBa
 
   return (
     <AuthContext.Provider
-      value={{ token, username, role, loaded, login, register, logout }}
+      value={{ token, username, role, loaded, login, loginStudent, register, logout }}
     >
       {children}
     </AuthContext.Provider>
