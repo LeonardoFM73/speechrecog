@@ -103,6 +103,14 @@ async def seed_admin_user() -> None:
     logger.info("Created default admin user: %s", admin_username)
 
 
+async def is_user_active(username: str) -> bool:
+    col = _Store.get_collection()
+    doc = await col.find_one({"username": username}, {"_id": 0, "is_active": 1})
+    if not doc:
+        return False
+    return doc.get("is_active", True)
+
+
 async def get_user_by_username(username: str) -> dict | None:
     col = _Store.get_collection()
     doc = await col.find_one({"username": username}, {"_id": 0, "password_hash": 0})

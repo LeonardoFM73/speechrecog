@@ -32,3 +32,6 @@ pymongo==4.9.2
 # Authentication (JWT + bcrypt)
 bcrypt==4.3.0
 PyJWT==2.10.1
+
+# Student database (MySQL)
+aiomysql==0.2.0

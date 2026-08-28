@@ -277,6 +277,22 @@ export const authClient = {
     if (!r.ok) throw new Error(`Auth check failed: ${r.status}`);
     return r.json();
   },
+  async loginStudent(
+    baseUrl: string,
+    customId: string,
+    password: string,
+  ): Promise<TokenResponse> {
+    const r = await fetch(`${baseUrl}/auth/login-student`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: customId, password }),
+    });
+    if (!r.ok) {
+      const json = await r.json().catch(() => ({}));
+      throw new ApiError(r.status, (json.detail as string) ?? `HTTP ${r.status}`);
+    }
+    return r.json();
+  },
 };
 
 // ---------------------------------------------------------------------------

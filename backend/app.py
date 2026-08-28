@@ -31,6 +31,7 @@ from services import chat as chat_service
 from services import tts as tts_service
 from services import sessions as sessions_service
 from services import users as users_service
+from services import students as students_service
 from services import auth as auth_service
 from services import scenarios as scenarios_service
 from models.schemas import UserCreateRequest, LoginRequest, TokenResponse
@@ -445,6 +446,9 @@ async def login(payload: LoginRequest) -> Any:
             raise HTTPException(status_code=401, detail="Invalid credentials")
         if not users_service.verify_password(payload.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="Invalid credentials")
+        active = await users_service.is_user_active(payload.username)
+        if not active:
+            raise HTTPException(status_code=401, detail="Akun dinonaktifkan")
         token = auth_service.create_token(user["username"], user.get("role", "user"))
         return {"access_token": token, "token_type": "bearer", "username": user["username"], "role": user.get("role", "user")}
     except HTTPException:
@@ -462,6 +466,31 @@ async def me(authorization: str | None = Header(default=None)) -> Any:
     if not decoded:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return {"username": decoded["username"], "role": decoded["role"]}
+
+
+@app.post("/auth/login-student", response_model=TokenResponse)
+async def login_student(payload: LoginRequest) -> Any:
+    try:
+        student = await students_service.find_student(payload.username)
+        if not student:
+            raise HTTPException(status_code=401, detail="ID Pemagang tidak ditemukan")
+        if student["kondisi_sekarang"] not in ("Sedang Pendidikan", "Sedang Pemagangan"):
+            raise HTTPException(status_code=401, detail="Status siswa tidak aktif")
+        if not students_service.verify_password(payload.password, student["password"]):
+            raise HTTPException(status_code=401, detail="Password salah")
+        await students_service.ensure_in_mongodb(student)
+        token = auth_service.create_token(student["user_name"], "user")
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "username": student["user_name"],
+            "role": "user",
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("student login failed for %s", payload.username)
+        raise HTTPException(status_code=500, detail=f"Login error: {exc}")
 
 
 @app.post("/admin/users/{username}/role", response_model=TokenResponse)
