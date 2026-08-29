@@ -11,7 +11,7 @@ import aiomysql
 logger = logging.getLogger(__name__)
 
 LMS_DB = {
-    "host": os.environ.get("DB_LMS_HOST", "10.100.101.12"),
+    "host": os.environ.get("DB_LMS_HOST", "10.100.101.18"),
     "port": int(os.environ.get("DB_LMS_PORT", 3307)),
     "db": os.environ.get("DB_LMS_DATABASE", "app_jftbasic"),
     "user": os.environ.get("DB_LMS_USERNAME", "root"),
