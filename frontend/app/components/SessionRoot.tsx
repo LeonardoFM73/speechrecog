@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { SessionProvider } from "@/components/SessionProvider";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import LoginPage from "@/components/LoginPage";
@@ -11,6 +12,17 @@ const TOKEN_KEY = "speechrecog.auth_token";
 const USERNAME_KEY = "speechrecog.username";
 
 export default function SessionRoot({ children, apiBase }: { children: ReactNode; apiBase: string }) {
+  const pathname = usePathname();
+
+  // Skip auth gate for SSO login page
+  if (pathname === "/sso-login") {
+    return (
+      <AuthProvider apiBase={apiBase}>
+        {children}
+      </AuthProvider>
+    );
+  }
+
   return (
     <AuthProvider apiBase={apiBase}>
       <AuthGate apiBase={apiBase}>{children}</AuthGate>
