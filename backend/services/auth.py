@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -40,11 +39,7 @@ def decode_token(token: str) -> dict[str, str] | None:
 
 def verify_sso_token(token: str, sig: str, expiry: int, email: str) -> dict | None:
     secret = os.environ.get("SSO_SECRET", "123Minori!@#")
-    expected_sig = hmac.new(
-        secret.encode(),
-        f"{token}|{expiry}|{email}".encode(),
-        hashlib.sha256,
-    ).hexdigest()
+    expected_sig = hashlib.md5(f"{secret}|{token}|{expiry}|{email}".encode()).hexdigest()
     if sig != expected_sig:
         return None
     if expiry < time.time():
