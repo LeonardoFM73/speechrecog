@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND_URL =
-  process.env.BACKEND_URL || "https://ai-dev-service-kaiwa.minori.co.id";
+  process.env.BACKEND_URL || "http://10.100.101.15:8001";
 
 export async function GET(request: NextRequest) {
   const path = request.nextUrl.pathname.replace(/^\/api/, "");
