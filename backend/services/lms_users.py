@@ -23,6 +23,14 @@ _connection_pool: aiomysql.pool.Pool | None = None
 _pool_lock = asyncio.Lock()
 
 
+async def close_pool() -> None:
+    global _connection_pool
+    if _connection_pool is not None:
+        _connection_pool.close()
+        await _connection_pool.wait_closed()
+        _connection_pool = None
+
+
 async def _get_pool() -> aiomysql.pool.Pool:
     global _connection_pool
     if _connection_pool is None:

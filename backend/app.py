@@ -157,6 +157,12 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
 
+    # LMS MySQL pool close
+    try:
+        await lms_users_service.close_pool()
+    except Exception:
+        pass
+
     # Cleanup temp files on shutdown
     for f in UPLOAD_DIR.glob("*"):
         f.unlink()
@@ -563,7 +569,6 @@ async def admin_list_users(
 async def sso_callback(
     token: str = Query(...),
     email: str = Query(...),
-    name: str = Query(...),
     role: str = Query("user"),
     expiry: int = Query(...),
     sig: str = Query(...),
