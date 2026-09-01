@@ -61,7 +61,7 @@ interface SessionDoc {
 }
 
 export default function AdminPage() {
-  const { username: currentUser, role: currentRole, logout } = useAuth();
+  const { username: currentUser, role: currentRole, loaded: authLoaded, logout } = useAuth();
   const [tab, setTab] = useState<Tab>("users");
 
   // Users state
@@ -221,7 +221,12 @@ export default function AdminPage() {
     setFormQuestions((p) => p.filter((_, i) => i !== idx));
   }, []);
 
-  if (currentRole !== "admin") return null;
+  if (!authLoaded) return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-sky-300 via-sky-100 to-amber-50">
+      <Loader className="h-6 w-6 animate-spin text-slate-400" />
+    </div>
+  );
+  if (currentRole !== "admin") { window.location.href = "/"; return null; }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-300 via-sky-100 to-amber-50">
