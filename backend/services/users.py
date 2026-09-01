@@ -82,6 +82,17 @@ async def update_role(username: str, role: str) -> dict | None:
     return {"username": username, "role": role}
 
 
+async def upsert_user(username: str, role: str, name: str = "") -> dict:
+    col = _Store.get_collection()
+    now = float(__import__("time").time())
+    result = await col.update_one(
+        {"username": username},
+        {"$set": {"username": username, "role": role, "name": name, "created_at": now}},
+        upsert=True,
+    )
+    return {"username": username, "role": role, "upserted": result.upserted_id is not None}
+
+
 async def delete_user(username: str) -> bool:
     col = _Store.get_collection()
     result = await col.delete_one({"username": username})

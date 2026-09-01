@@ -581,6 +581,7 @@ async def sso_callback(
     if not lms_user:
         raise HTTPException(status_code=403, detail="User not found or inactive in JFT Basic LMS")
 
+    await users_service.upsert_user(email, lms_user["role"], lms_user.get("name", ""))
     jwt_token = auth_service.create_token(email, lms_user["role"])
     frontend_url = os.environ.get("NEXT_PUBLIC_API_URL", "https://ai-dev-kaiwa.minori.co.id")
     base = frontend_url.rstrip('/')
