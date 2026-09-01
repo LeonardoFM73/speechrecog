@@ -89,6 +89,13 @@ async def list_user_sessions(username: str) -> list[dict]:
     return await cursor.to_list(length=None)
 
 
+async def get_session_owned(session_id: str, username: str) -> dict | None:
+    doc = await _Store.get_collection().find_one(
+        {"session_id": session_id, "username": username}, {"_id": 0}
+    )
+    return doc
+
+
 async def list_all_sessions(limit: int = 100) -> list[dict]:
     cursor = _Store.get_collection().find({}, {"_id": 0}).sort("started_at", DESCENDING).limit(limit)
     return await cursor.to_list(length=None)
