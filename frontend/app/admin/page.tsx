@@ -103,7 +103,7 @@ export default function AdminPage() {
       const data = await r.json();
       // Sanitize: ensure each user has string username/role and number created_at
       const sanitized = (data as any[]).map((u: any) => ({
-        username: String(u.username ?? ""),
+        username: u.username && typeof u.username === "object" ? String((u.username as any).username ?? "") : String(u.username ?? ""),
         role: String(u.role ?? "user"),
         created_at: Number(u.created_at ?? 0),
       }));
@@ -131,7 +131,7 @@ export default function AdminPage() {
       // Sanitize sessions and messages to prevent object rendering
       const sanitized = (data as any[]).map((s: any) => ({
         ...s,
-        username: String(s.username ?? ""),
+        username: s.username && typeof s.username === "object" ? String((s.username as any).username ?? "") : String(s.username ?? ""),
         mode: String(s.mode ?? "roleplay"),
         messages: (s.messages ?? []).map((m: any) => ({
           turn: Number(m.turn ?? 0),
