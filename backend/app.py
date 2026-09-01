@@ -562,6 +562,39 @@ async def admin_list_users(
     return users
 
 
+@app.get("/admin/sessions")
+async def admin_list_sessions(
+    authorization: str | None = Header(default=None),
+    limit: int = 100,
+) -> Any:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    decoded = auth_service.decode_token(authorization[len("Bearer "):])
+    if not decoded:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if decoded["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    return await sessions_service.list_all_sessions(limit)
+
+
+@app.get("/admin/sessions/{session_id}")
+async def admin_get_session(
+    session_id: str,
+    authorization: str | None = Header(default=None),
+) -> Any:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    decoded = auth_service.decode_token(authorization[len("Bearer "):])
+    if not decoded:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if decoded["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    doc = await sessions_service.get_session_any(session_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return doc
+
+
 # ---------------------------------------------------------------------------
 # SSO endpoints
 # ---------------------------------------------------------------------------

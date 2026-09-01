@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Shield, User, Loader, Plus, Trash2, Pencil, X } from "lucide-react";
+import { ArrowLeft, Shield, User, Loader, Plus, Trash2, Pencil, X, MessageCircle, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -32,7 +32,33 @@ interface ScenarioDoc {
   created_at: number;
 }
 
-type Tab = "users" | "scenarios";
+type Tab = "users" | "scenarios" | "riwayat";
+
+interface SessionTurn {
+  turn: number;
+  ts: number;
+  user_text: string;
+  language: string;
+  audio_duration_ms: number;
+  ai_reply_jp: string | null;
+  ai_reply_translation: string | null;
+  tts_speaker_id: number | null;
+  audio_blob_ref: string | null;
+  scenario_switched: boolean;
+  error: string | null;
+}
+
+interface SessionDoc {
+  session_id: string;
+  username: string;
+  started_at: number;
+  ended_at: number | null;
+  mode: string;
+  scenario_id: string;
+  scenario_text: string | null;
+  speaker_id: number | null;
+  messages: SessionTurn[];
+}
 
 export default function AdminPage() {
   const { username: currentUser, role: currentRole, logout } = useAuth();
@@ -50,6 +76,13 @@ export default function AdminPage() {
   const [scenariosError, setScenariosError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Riwayat state
+  const [sessions, setSessions] = useState<SessionDoc[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState("");
+  const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  const [sessionFilter, setSessionFilter] = useState("");
 
   // Form state
   const [formKind, setFormKind] = useState<"roleplay" | "kaiwa">("roleplay");
@@ -81,11 +114,22 @@ export default function AdminPage() {
     } catch (err) { setScenariosError(err instanceof Error ? err.message : "Failed"); } finally { setScenariosLoading(false); }
   }, [logout]);
 
+  const fetchSessions = useCallback(async () => {
+    const t = token();
+    if (!t) { logout(); return; }
+    try {
+      const r = await fetch(`${API_BASE}/admin/sessions?limit=200`, { headers: { Authorization: `Bearer ${t}` } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setSessions(await r.json());
+    } catch (err) { setSessionsError(err instanceof Error ? err.message : "Failed"); } finally { setSessionsLoading(false); }
+  }, [logout]);
+
   useEffect(() => {
     if (currentRole !== "admin") { window.location.href = "/"; return; }
     fetchUsers();
     fetchScenarios();
-  }, [currentRole, fetchUsers, fetchScenarios]);
+    fetchSessions();
+  }, [currentRole, fetchUsers, fetchScenarios, fetchSessions]);
 
   const updateRole = useCallback(async (targetUsername: string, newRole: string) => {
     if (targetUsername === currentUser) return;
@@ -194,7 +238,7 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-4 rounded-xl bg-white/60 p-1 w-fit">
-          {(["users", "scenarios"] as Tab[]).map((t) => (
+          {(["users", "scenarios", "riwayat"] as Tab[]).map((t) => (
             <button
               key={t}
               type="button"
@@ -203,7 +247,7 @@ export default function AdminPage() {
                 tab === t ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              {t === "users" ? "Pengguna" : "Skenario"}
+              {t === "users" ? "Pengguna" : t === "scenarios" ? "Skenario" : "Riwayat"}
             </button>
           ))}
         </div>
@@ -303,6 +347,106 @@ export default function AdminPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Riwayat tab */}
+        {tab === "riwayat" && (
+          <div className="rounded-2xl bg-white/80 border border-slate-200 shadow-lg backdrop-blur overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <h2 className="text-sm font-semibold text-slate-700">Riwayat Percakapan</h2>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Cari user..."
+                  value={sessionFilter}
+                  onChange={(e) => setSessionFilter(e.target.value)}
+                  className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-amber-400 w-36"
+                />
+              </div>
+            </div>
+
+            {sessionsLoading ? (
+              <div className="flex items-center justify-center py-16"><Loader className="h-6 w-6 animate-spin text-slate-400" /></div>
+            ) : sessionsError ? (
+              <div className="p-4 text-sm text-red-600 bg-red-50">{sessionsError}</div>
+            ) : sessions.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 text-sm">Belum ada sesi.</div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {sessions
+                  .filter((s) => !sessionFilter || s.username.toLowerCase().includes(sessionFilter.toLowerCase()))
+                  .map((s) => {
+                    const isExpanded = expandedSession === s.session_id;
+                    const turnCount = s.messages?.length ?? 0;
+                    return (
+                      <div key={s.session_id}>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedSession(isExpanded ? null : s.session_id)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition text-left"
+                        >
+                          <div className="h-8 w-8 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+                            <MessageCircle className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-slate-700 truncate">{s.username}</p>
+                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${s.mode === "roleplay" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"}`}>{s.mode}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                              <Clock className="h-3 w-3" />
+                              <span>{new Date(s.started_at * 1000).toLocaleString()}</span>
+                              <span>·</span>
+                              <span>{turnCount} percakapan</span>
+                            </div>
+                          </div>
+                          {isExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                        </button>
+                        {isExpanded && (
+                          <div className="px-4 pb-4 border-t border-slate-100 bg-slate-50/50">
+                            {s.scenario_text && (
+                              <p className="text-[11px] text-slate-500 mt-2 italic">"{s.scenario_text}"</p>
+                            )}
+                            <div className="mt-2 space-y-2">
+                              {s.messages?.map((msg) => (
+                                <div key={msg.turn} className="text-xs">
+                                  <div className="flex gap-2">
+                                    <span className="text-slate-400 shrink-0">#{msg.turn}</span>
+                                    {msg.user_text && (
+                                      <p className="text-slate-700">
+                                        <span className="font-medium text-slate-500">User: </span>
+                                        {msg.user_text}
+                                      </p>
+                                    )}
+                                  </div>
+                                  {(msg.ai_reply_jp || msg.ai_reply_translation) && (
+                                    <div className="ml-6 mt-1 space-y-0.5">
+                                      {msg.ai_reply_jp && (
+                                        <p className="text-sky-700">
+                                          <span className="font-medium">AI: </span>{msg.ai_reply_jp}
+                                        </p>
+                                      )}
+                                      {msg.ai_reply_translation && (
+                                        <p className="text-slate-500 italic">
+                                          <span className="font-medium">↕</span> {msg.ai_reply_translation}
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                  {msg.error && (
+                                    <p className="text-red-500 mt-0.5">⚠ {msg.error}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </div>
