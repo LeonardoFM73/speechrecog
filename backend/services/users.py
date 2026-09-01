@@ -122,6 +122,17 @@ async def is_user_active(username: str) -> bool:
     return doc.get("is_active", True)
 
 
+async def update_active_status(username: str, is_active: bool) -> dict | None:
+    col = _Store.get_collection()
+    result = await col.update_one(
+        {"username": username},
+        {"$set": {"is_active": is_active}},
+    )
+    if result.matched_count == 0:
+        return None
+    return {"username": username, "is_active": is_active}
+
+
 async def get_user_by_username(username: str) -> dict | None:
     col = _Store.get_collection()
     doc = await col.find_one({"username": username}, {"_id": 0, "password_hash": 0})

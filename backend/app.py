@@ -239,6 +239,21 @@ async def debug_test_exception() -> Any:
     raise ValueError("test error message")
 
 
+@app.get("/debug/db-status")
+async def debug_db_status() -> Any:
+    """Debug endpoint to check MongoDB connection and admin status."""
+    try:
+        col = users_service._Store.get_collection()
+        admin_doc = await col.find_one({"username": "admin"}, {"_id": 0, "username": 1, "is_active": 1, "role": 1})
+        return {
+            "mongo_url": os.environ.get("MONGODB_URL", "not set"),
+            "admin": admin_doc,
+            "all_users": await col.find({}, {"_id": 0, "username": 1, "is_active": 1, "role": 1}).to_list(length=None)
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 # ---------------------------------------------------------------------------
 # TTS (VOICEVOX) endpoints
 # ---------------------------------------------------------------------------
@@ -560,6 +575,29 @@ async def admin_list_users(
     for u in users:
         u.setdefault("role", "user")
     return users
+
+
+@app.patch("/admin/users/{username}/active")
+async def admin_update_active_status(
+    username: str,
+    payload: dict,
+    authorization: str | None = Header(default=None),
+) -> Any:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    decoded = auth_service.decode_token(authorization[len("Bearer "):])
+    if not decoded:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if decoded["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    existing = await users_service.get_user(username)
+    if not existing:
+        raise HTTPException(status_code=404, detail="User not found")
+    is_active = bool(payload.get("is_active", True))
+    updated = await users_service.update_active_status(username, is_active)
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to update user")
+    return {"username": username, "is_active": is_active}
 
 
 @app.get("/admin/sessions")
