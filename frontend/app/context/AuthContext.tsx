@@ -46,7 +46,8 @@ export function AuthProvider({ children, apiBase }: { children: ReactNode; apiBa
       authClient
         .me(apiBase, storedToken)
         .then((data) => {
-          const newRole = data.role as UserRole || "user";
+          const backendRole = data.role as string;
+          const newRole = backendRole === "admin" ? "admin" : "user";
           setRole(newRole);
           localStorage.setItem(USERNAME_KEY + ".role", newRole);
         })
@@ -67,12 +68,13 @@ export function AuthProvider({ children, apiBase }: { children: ReactNode; apiBa
   const login = useCallback(
     async (username: string, password: string) => {
       const res = await authClient.login(apiBase, username, password);
+      const role = res.role === "admin" ? "admin" : "user";
       localStorage.setItem(TOKEN_KEY, res.access_token);
       localStorage.setItem(USERNAME_KEY, res.username);
-      localStorage.setItem(USERNAME_KEY + ".role", res.role);
+      localStorage.setItem(USERNAME_KEY + ".role", role);
       setToken(res.access_token);
       setUsername(res.username);
-      setRole(res.role as UserRole);
+      setRole(role);
     },
     [apiBase],
   );
@@ -80,12 +82,13 @@ export function AuthProvider({ children, apiBase }: { children: ReactNode; apiBa
   const loginStudent = useCallback(
     async (customId: string, password: string) => {
       const res = await authClient.loginStudent(apiBase, customId, password);
+      const role = res.role === "admin" ? "admin" : "user";
       localStorage.setItem(TOKEN_KEY, res.access_token);
       localStorage.setItem(USERNAME_KEY, res.username);
-      localStorage.setItem(USERNAME_KEY + ".role", res.role);
+      localStorage.setItem(USERNAME_KEY + ".role", role);
       setToken(res.access_token);
       setUsername(res.username);
-      setRole(res.role as UserRole);
+      setRole(role);
     },
     [apiBase],
   );
@@ -93,12 +96,13 @@ export function AuthProvider({ children, apiBase }: { children: ReactNode; apiBa
   const register = useCallback(
     async (username: string, password: string) => {
       const res = await authClient.register(apiBase, username, password);
+      const role = res.role === "admin" ? "admin" : "user";
       localStorage.setItem(TOKEN_KEY, res.access_token);
       localStorage.setItem(USERNAME_KEY, res.username);
-      localStorage.setItem(USERNAME_KEY + ".role", res.role);
+      localStorage.setItem(USERNAME_KEY + ".role", role);
       setToken(res.access_token);
       setUsername(res.username);
-      setRole(res.role as UserRole);
+      setRole(role);
     },
     [apiBase],
   );
@@ -114,12 +118,13 @@ export function AuthProvider({ children, apiBase }: { children: ReactNode; apiBa
 
   const ssoLogin = useCallback(
     (jwt: string, username: string, role: string) => {
+      const mappedRole = role === "admin" ? "admin" : "user";
       localStorage.setItem(TOKEN_KEY, jwt);
       localStorage.setItem(USERNAME_KEY, username);
-      localStorage.setItem(USERNAME_KEY + ".role", role);
+      localStorage.setItem(USERNAME_KEY + ".role", mappedRole);
       setToken(jwt);
       setUsername(username);
-      setRole(role as UserRole);
+      setRole(mappedRole);
     },
     [],
   );
