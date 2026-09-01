@@ -100,7 +100,14 @@ export default function AdminPage() {
     try {
       const r = await fetch(`${API_BASE}/admin/users`, { headers: { Authorization: `Bearer ${t}` } });
       if (!r.ok) { if (r.status === 401 || r.status === 403) { logout(); return; } throw new Error(`HTTP ${r.status}`); }
-      setUsers(await r.json());
+      const data = await r.json();
+      // Sanitize: ensure each user has string username/role and number created_at
+      const sanitized = (data as any[]).map((u: any) => ({
+        username: String(u.username ?? ""),
+        role: String(u.role ?? "user"),
+        created_at: Number(u.created_at ?? 0),
+      }));
+      setUsers(sanitized);
     } catch (err) { setUsersError(err instanceof Error ? err.message : "Failed"); } finally { setUsersLoading(false); }
   }, [logout]);
 
@@ -120,7 +127,21 @@ export default function AdminPage() {
     try {
       const r = await fetch(`${API_BASE}/admin/sessions?limit=200`, { headers: { Authorization: `Bearer ${t}` } });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      setSessions(await r.json());
+      const data = await r.json();
+      // Sanitize sessions and messages to prevent object rendering
+      const sanitized = (data as any[]).map((s: any) => ({
+        ...s,
+        username: String(s.username ?? ""),
+        mode: String(s.mode ?? "roleplay"),
+        messages: (s.messages ?? []).map((m: any) => ({
+          turn: Number(m.turn ?? 0),
+          user_text: String(m.user_text ?? ""),
+          ai_reply_jp: m.ai_reply_jp ? String(m.ai_reply_jp) : null,
+          ai_reply_translation: m.ai_reply_translation ? String(m.ai_reply_translation) : null,
+          error: m.error ? String(m.error) : null,
+        })),
+      }));
+      setSessions(sanitized);
     } catch (err) { setSessionsError(err instanceof Error ? err.message : "Failed"); } finally { setSessionsLoading(false); }
   }, [logout]);
 
