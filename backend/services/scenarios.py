@@ -173,6 +173,7 @@ async def create_scenario(username: str, payload: ScenarioCreateRequest) -> dict
     }
     await _Store.get_collection().insert_one(doc)
     logger.info("Created scenario %s by %s", doc["scenario_id"], username)
+    doc.pop("_id", None)
     return doc
 
 
