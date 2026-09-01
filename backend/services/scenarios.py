@@ -67,24 +67,24 @@ async def ping() -> bool:
         return False
 
 
-async def current_user(authorization: str | None = Header(default=None)) -> str:
+async def current_user(authorization: str | None = Header(default=None)) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     token = authorization[len("Bearer "):]
-    username = auth_service.decode_token(token)
-    if not username:
+    user = auth_service.decode_token(token)
+    if not user:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
-    return username
+    return user
 
 
-async def check_admin(authorization: str | None = Header(default=None)) -> str:
-    username = await current_user(authorization)
+async def check_admin(authorization: str | None = Header(default=None)) -> dict:
+    user = await current_user(authorization)
     doc = await _Store.get_collection().database["users"].find_one(
-        {"username": username}, {"_id": 0, "role": 1}
+        {"username": user["username"]}, {"_id": 0, "role": 1}
     )
     if not doc or doc.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin only")
-    return username
+    return user
 
 
 PRESET_SCENARIOS = [
@@ -231,7 +231,7 @@ router = APIRouter(prefix="/admin/scenarios", tags=["scenarios"])
 @router.get("", response_model=list[dict])
 async def list_endpoint(
     kind: str | None = None,
-    _admin: str = Depends(check_admin),
+    _admin: dict = Depends(check_admin),
 ) -> Any:
     try:
         return await list_scenarios(kind=kind)
@@ -243,10 +243,10 @@ async def list_endpoint(
 @router.post("", response_model=dict)
 async def create_endpoint(
     payload: ScenarioCreateRequest,
-    admin: str = Depends(check_admin),
+    admin: dict = Depends(check_admin),
 ) -> Any:
     try:
-        return await create_scenario(admin, payload)
+        return await create_scenario(admin["username"], payload)
     except Exception as exc:
         logger.exception("create_scenario failed")
         raise HTTPException(status_code=500, detail=str(exc))
@@ -256,10 +256,10 @@ async def create_endpoint(
 async def update_endpoint(
     scenario_id: str,
     payload: ScenarioUpdateRequest,
-    admin: str = Depends(check_admin),
+    admin: dict = Depends(check_admin),
 ) -> Any:
     try:
-        doc = await update_scenario(scenario_id, admin, payload)
+        doc = await update_scenario(scenario_id, admin["username"], payload)
         if not doc:
             raise HTTPException(status_code=404, detail="Scenario not found")
         return doc
@@ -273,10 +273,10 @@ async def update_endpoint(
 @router.delete("/{scenario_id}")
 async def delete_endpoint(
     scenario_id: str,
-    admin: str = Depends(check_admin),
+    admin: dict = Depends(check_admin),
 ) -> Any:
     try:
-        deleted = await delete_scenario(scenario_id, admin)
+        deleted = await delete_scenario(scenario_id, admin["username"])
         if not deleted:
             raise HTTPException(status_code=404, detail="Scenario not found")
         return {"deleted": scenario_id}
